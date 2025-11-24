@@ -1,0 +1,276 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="CycleManagerStepPausing" Id="{5fc7a137-11b7-4e74-abd4-28edf030ebfd}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+A class to provide fluent access to the current step pause configuration of a cycle manager.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+FUNCTION_BLOCK INTERNAL CycleManagerStepPausing IMPLEMENTS CNM_CycleManagerInterfaces.IPauseConfiguration
+VAR
+	parameters :ICycleManagerStepParameters;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="cycleManager" Id="{647cab8a-9a5f-4721-8edb-40e092707ff5}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Gets or sets the cycle manager step parameters interface used for pause configuration.
+
+### Purpose and usage
+This property provides access to the underlying cycle manager step parameters interface
+that this pause configurator operates on. It allows getting the current cycle manager instance
+and setting a new one if needed for step-specific pause configuration.
+
+The property is primarily used internally but can be accessed for direct parameter manipulation
+or when switching between different cycle manager instances at the step level.
+
+### typical usage patterns
+1. **Internal initialization**: Set during configurator setup
+2. **Runtime switching**: Change cycle manager instances
+3. **Direct access**: Get parameters for advanced step configuration
+4. **Dependency injection**: Inject different implementations
+
+### When to use
+- During initialization to connect to a cycle manager
+- When switching between different cycle manager implementations
+- For direct access to step-specific pause parameters
+- In advanced configuration scenarios for individual steps
+
+### Example
+```
+// Get current cycle manager
+VAR
+    currentManager : ICycleManagerStepParameters;
+END_VAR
+
+currentManager := stepPauseConfig.cycleManager;
+
+// Check current step pause state
+IF currentManager.currentPauseEnabled THEN
+    // Pause is enabled for current step
+END_IF;
+
+// Set new cycle manager
+VAR
+    newManager : MyCycleManagerStepImplementation;
+END_VAR
+
+stepPauseConfig.cycleManager := newManager;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY cycleManager : ICycleManagerStepParameters]]></Declaration>
+      <Get Name="Get" Id="{7e2e8465-671a-4355-92b1-7569cdc17b28}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[cycleManager := THIS^.parameters;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{cecdc6a6-cf09-4ad0-97bb-eb78a9026cf6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.parameters := cycleManager;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="disable" Id="{73e63ef1-4b4b-43f2-83df-408c0aa38b47}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Disables pause functionality for the current cycle manager step.
+
+### Purpose and usage
+This method disables the pause functionality for the current step only, overriding
+the sequence default. When pause is disabled for a step, pause requests will be
+ignored while this step is executing, ensuring the step runs to completion.
+
+Disabling pause at the step level is useful for:
+- Critical operations within a pausable sequence
+- Time-sensitive steps that must not be interrupted
+- Atomic operations that need to complete
+- Safety-critical step procedures
+
+### typical usage patterns
+1. **Critical steps**: Prevent pausing during important operations
+2. **Time-sensitive**: Steps with timing requirements
+3. **Atomic operations**: Multi-part steps that must complete together
+4. **Override sequence**: Disable pause for specific steps only
+
+### When to use
+- For steps that must complete without interruption
+- During critical operations within a larger sequence
+- For time-sensitive or atomic step operations
+- When specific steps should override sequence pause settings
+
+### Example
+```
+// Disable pause for critical step
+CASE cycleManager.steps.current OF
+    MySteps.PREPARE_CRITICAL:
+        // Next step cannot be paused
+        cycleManager.configuration.configuration.step
+            .pause.disable();
+        cycleManager.steps.next := MySteps.CRITICAL_WRITE;
+        
+    MySteps.CRITICAL_WRITE:
+        // This step runs without pause possibility
+        IF writeCriticalData() THEN
+            // Re-enable pause for next step
+            cycleManager.configuration.configuration.step
+                .pause.enable();
+            cycleManager.steps.next := MySteps.NORMAL_OPERATION;
+        END_IF;
+END_CASE
+
+// Temporarily disable pause for atomic operation
+IF startAtomicOperation THEN
+    cycleManager.configuration.configuration.step
+        .pause.disable();
+    cycleManager.configuration.configuration.step
+        .timeout := T#30S;  // Ensure completion
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD disable
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.currentPauseEnabled := FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enable" Id="{b30b3f3b-cc02-40a6-bf9a-0186ce523527}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Enables pause functionality for the current cycle manager step.
+
+### Purpose and usage
+This method enables the pause functionality for the current step only, overriding
+the sequence default if necessary. When pause is enabled for a step, the cycle
+can be paused while this step is executing, allowing operators to halt execution.
+
+Enabling pause at the step level is useful for:
+- Wait or idle steps where pausing is safe
+- User interaction steps
+- Steps where operator inspection may be needed
+- Override sequence settings for specific steps
+
+### typical usage patterns
+1. **Wait steps**: Enable pause during wait operations
+2. **User steps**: Allow pause during user interactions
+3. **Inspection points**: Enable pause for quality checks
+4. **Override sequence**: Enable pause for specific steps only
+
+### When to use
+- For steps where pausing is safe and desired
+- During wait or idle operations
+- At inspection or decision points in the sequence
+- When specific steps should allow pausing regardless of sequence settings
+
+### Example
+```
+// Enable pause for wait step
+CASE cycleManager.steps.current OF
+    MySteps.WAIT_FOR_OPERATOR:
+        // This step can be paused
+        cycleManager.configuration.configuration.step
+            .pause.enable();
+        IF operatorReady THEN
+            cycleManager.steps.next := MySteps.CONTINUE;
+        END_IF;
+        
+    MySteps.INSPECTION_POINT:
+        // Enable pause for inspection
+        cycleManager.configuration.configuration.step
+            .pause.enable();
+        cycleManager.configuration.configuration.step
+            .timeout := T#0S;  // No timeout during inspection
+        IF inspectionComplete THEN
+            cycleManager.steps.next := MySteps.NEXT;
+        END_IF;
+END_CASE
+
+// Conditionally enable pause
+IF debugMode OR maintenanceMode THEN
+    cycleManager.configuration.configuration.step
+        .pause.enable();
+END_IF;
+
+// Handle pause request for enabled step
+IF cycleManager.currentPauseEnabled AND pauseRequested THEN
+    cycleManager.requestPause();
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD enable
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.currentPauseEnabled := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

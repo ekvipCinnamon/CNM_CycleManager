@@ -1,0 +1,271 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="CycleManagerDefaultStepping" Id="{6d508499-4937-4061-9886-b75ff6f55a33}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+A class to provide fluent access to the default stepping sequence configuration of a cycle manager.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+FUNCTION_BLOCK INTERNAL CycleManagerDefaultStepping IMPLEMENTS CNM_CycleManagerInterfaces.ISteppingConfiguration
+VAR
+	parameters :CNM_CycleManagerInterfaces.ICycleManagerDefaultParameters;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="cycleManager" Id="{486b29f7-31c2-451b-a620-8fd614d11f8b}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Gets or sets the cycle manager default parameters interface used for stepping configuration.
+
+### Purpose and usage
+This property provides access to the underlying cycle manager default parameters interface
+that this stepping configurator operates on. It allows getting the current cycle manager instance
+and setting a new one if needed.
+
+The property is primarily used internally but can be accessed for direct parameter manipulation
+or when switching between different cycle manager instances.
+
+### typical usage patterns
+1. **Internal initialization**: Set during configurator setup
+2. **Runtime switching**: Change cycle manager instances
+3. **Direct access**: Get parameters for advanced configuration
+4. **Dependency injection**: Inject different implementations
+
+### When to use
+- During initialization to connect to a cycle manager
+- When switching between different cycle manager implementations
+- For direct access to stepping-related parameters
+- In advanced configuration scenarios
+
+### Example
+```
+// Get current cycle manager
+VAR
+    currentManager : ICycleManagerDefaultParameters;
+END_VAR
+
+currentManager := steppingConfig.cycleManager;
+
+// Check current stepping state
+IF currentManager.defaultSteppingEnabled THEN
+    // Stepping is enabled
+END_IF;
+
+// Set new cycle manager
+VAR
+    newManager : MyCycleManagerImplementation;
+END_VAR
+
+steppingConfig.cycleManager := newManager;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY cycleManager : CNM_CycleManagerInterfaces.ICycleManagerDefaultParameters]]></Declaration>
+      <Get Name="Get" Id="{d274be38-f833-4647-9bfa-79f8ed538ceb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[cycleManager := THIS^.parameters;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{27052902-9028-468a-857c-4d6d16e15f8a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.parameters := cycleManager;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="disable" Id="{76ba1d48-600f-4f13-9967-fae8b40bcca3}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Disables stepping mode for the cycle manager sequence.
+
+### Purpose and usage
+This method disables the stepping mode functionality for the entire cycle manager sequence.
+When stepping is disabled, the cycle runs continuously without requiring manual step triggers,
+executing each step automatically as conditions are met.
+
+Disabling stepping mode is the normal production configuration where sequences run
+automatically from start to finish.
+
+### typical usage patterns
+1. **Production mode**: Disable stepping for automatic execution
+2. **Normal operation**: Run sequences without manual intervention
+3. **Automated testing**: Execute full sequences automatically
+4. **Performance mode**: Remove stepping overhead
+
+### When to use
+- In production environments for automatic operation
+- When commissioning is complete and manual control not needed
+- For automated test sequences
+- When maximum performance is required
+- As the default mode for normal operation
+
+### Example
+```
+// Disable stepping for production
+cycleManager.configuration.configuration.sequence
+    .stepping
+    .disable();
+
+// Switch modes based on operation
+IF productionMode THEN
+    cycleManager.configuration.configuration.sequence
+        .stepping.disable();
+ELSE
+    cycleManager.configuration.configuration.sequence
+        .stepping.enable();
+END_IF;
+
+// Ensure stepping is disabled for critical sequences
+CASE cycleManager.steps.current OF
+    MySteps.CRITICAL_SEQUENCE_START:
+        cycleManager.configuration.configuration.sequence
+            .stepping.disable();  // No manual stepping allowed
+        cycleManager.steps.next := MySteps.CRITICAL_OPERATION;
+END_CASE
+
+// Update HMI based on stepping mode
+IF NOT cycleManager.steppingEnabled THEN
+    HMI.StepButton.Visible := FALSE;
+    HMI.AutoStepCheckbox.Visible := FALSE;
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD disable
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.defaultSteppingEnabled := FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enable" Id="{02e92f04-f686-42bc-aa28-a87fa114784c}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Enables stepping mode for the cycle manager sequence.
+
+### Purpose and usage
+This method enables the stepping mode functionality for the entire cycle manager sequence.
+When stepping is enabled, the cycle execution pauses after each step, requiring manual
+trigger or auto-step delay before proceeding to the next step.
+
+Stepping mode is essential for:
+- Commissioning new sequences
+- Debugging sequence logic
+- Training operators
+- Validating step transitions
+
+### typical usage patterns
+1. **Commissioning**: Step through new sequences manually
+2. **Debugging**: Examine state between steps
+3. **Training**: Demonstrate sequence flow to operators
+4. **Validation**: Verify each step executes correctly
+
+### When to use
+- During initial commissioning of new equipment
+- When debugging sequence problems
+- For operator training sessions
+- During sequence development and testing
+- When validating modifications to sequences
+
+### Example
+```
+// Enable stepping for commissioning
+cycleManager.configuration.configuration.sequence
+    .stepping
+    .enable();
+
+// Enable stepping with auto-advance
+IF debugMode THEN
+    cycleManager.configuration.configuration.sequence
+        .stepping.enable();
+    cycleManager.setAutoStepDelay(T#2S);  // Auto advance every 2 seconds
+END_IF;
+
+// Manual step control
+IF cycleManager.steppingEnabled THEN
+    IF HMI.StepButton.Pressed THEN
+        cycleManager.triggerStep();  // Advance to next step
+    END_IF;
+END_IF;
+
+// Show stepping controls in HMI
+IF cycleManager.steppingEnabled THEN
+    HMI.StepButton.Visible := TRUE;
+    HMI.CurrentStep.Text := INT_TO_STRING(cycleManager.steps.current);
+    HMI.NextStep.Text := INT_TO_STRING(cycleManager.steps.next);
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD enable
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.defaultSteppingEnabled := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

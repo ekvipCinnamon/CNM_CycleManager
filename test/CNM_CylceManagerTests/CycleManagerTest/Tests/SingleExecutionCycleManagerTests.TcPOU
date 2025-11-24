@@ -1,0 +1,71 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="SingleExecutionCycleManagerTests" Id="{8fa5506b-23ad-4cfb-828f-34026e0ea3dd}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK SingleExecutionCycleManagerTests EXTENDS FB_TestSuite
+VAR
+END_VAR
+VAR_OUTPUT
+	execute : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Folder Name="Assertions" Id="{f0358065-d999-428f-a8df-d26593011476}">
+      <Folder Name="Error" Id="{24f2fadc-6908-428e-8cb8-cd3994b85915}" />
+      <Folder Name="FirstCycle" Id="{7b4c324c-027c-4064-9ee4-6b46b07352f8}" />
+      <Folder Name="FirstStepCycle" Id="{921a56b6-e45d-4c2f-83f1-48d4e02c408f}" />
+      <Folder Name="SecondStepCycle" Id="{3791a334-92f3-4ec6-a031-577303d1e2b2}" />
+    </Folder>
+    <Method Name="simpleCaseChain" Id="{bdb8a9b1-6a4b-433d-a7d2-30e87a761843}">
+      <Declaration><![CDATA[METHOD simpleCaseChain
+VAR
+	abort : BOOL;
+END_VAR
+VAR_INST
+	cM : CNM_CycleManager.SingleExecutionCycleManager();
+	execute : BOOL := FALSE;
+	step : DINT := 0;
+END_VAR
+VAR CONSTANT
+	STEP_SETUP : DINT := 0;
+	STEP_FIRST_EXECUTE_CYCLE : DINT := 1;
+	STEP_SECOND_EXECUTE_CYCLE : DINT := 2;
+	STEP_THIRD_EXECUTE_CYCLE : DINT := 2;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[RETURN (NOT TcUnit.TEST_ORDERED(''));
+
+cM(execute := execute);
+
+CASE step OF
+STEP_SETUP:
+	AssertTrue(Condition := cM.state = SingleExecutionState.IDLE, Message := 'Cycle Manager should be initialized with idle');
+	AssertTrue(Condition := cM.step.current = DefaultSteps.STEP.IDLE, Message := 'Cycle Manager should be initialized with idle step as current');
+	AssertFalse(Condition := cM.executeStep, Message := 'Cycle Manager should have external execute = FALSE after initialization');
+	execute := TRUE;
+	step := STEP_FIRST_EXECUTE_CYCLE;
+STEP_FIRST_EXECUTE_CYCLE:
+	AssertTrue(Condition := cM.state = SingleExecutionState.BUSY, Message := 'Cycle Manager should be busy in first cycle with exeute = true');
+	AssertTrue(Condition := cM.step.current = DefaultSteps.STEP.INIT, Message := 'Cycle Manager should be in INIT step in first cycle with execute = true');
+	AssertFalse(Condition := cM.executeStep, Message := 'Cycle Manager should have external execute = FALSE in first cycle with execute = true');
+	step := STEP_SECOND_EXECUTE_CYCLE;
+STEP_SECOND_EXECUTE_CYCLE:
+	AssertTrue(Condition := cM.state = SingleExecutionState.BUSY, Message := 'Cycle Manager should be busy');
+	AssertTrue(Condition := cM.step.current = DefaultSteps.STEP.INIT, Message := 'Cycle Manager should be in INIT');
+	AssertTrue(Condition := cM.executeStep, Message := 'Cycle Manager should have external execute = TRUE');
+	step := STEP_THIRD_EXECUTE_CYCLE;
+STEP_THIRD_EXECUTE_CYCLE:
+	AssertTrue(Condition := cM.state = SingleExecutionState.BUSY, Message := 'Cycle Manager should be busy');
+	AssertTrue(Condition := cM.step.current = DefaultSteps.STEP.INIT, Message := 'Cycle Manager should be in INIT');
+	AssertTrue(Condition := cM.executeStep, Message := 'Cycle Manager should have external execute = TRUE');
+	;
+ELSE ;
+END_CASE
+
+IF(abort)THEN
+	TcUnit.TEST_FINISHED();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

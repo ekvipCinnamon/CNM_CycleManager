@@ -1,0 +1,1846 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="AbstractCycleManager" Id="{2a2c30e9-a800-4b85-ab85-c34497491877}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+An abstract CycleManager implementation to provide basic functionality.
+Does not update the state of the cyclemanager, it only provides some protected update functions.
+
+.. <info>
+If used in the same step, the order/precedence of method calls should be like this:
+configurations
+enter
+executeCommand
+evaluate
+waitFor
+proceed
+proceedWith
+acknowledge
+leave
+.. </info>
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+FUNCTION_BLOCK ABSTRACT AbstractCycleManager 
+EXTENDS CNM_AssertionInterfaces.AbstractAssertor 
+IMPLEMENTS CNM_CycleManagerInterfaces.ISingleExecutionCycleManager, 
+	CNM_CycleManagerInterfaces.ICycleManagerDefaultParameters, 
+	ICycleManagerStepParameters
+//config
+VAR
+	sequenceErrorStep :DINT := STEP_ERROR;
+	sequencePauseEnabled :BOOL := FALSE;
+	sequenceSteppingEnabled :BOOL := FALSE;
+	sequenceTimeOut :TIME := T#0S;
+	sequenceStopRequestMode :CNM_CycleManagerInterfaces.StepStopRequestMode := CNM_CycleManagerInterfaces.StepStopRequestMode.IGNORE;
+	sequenceTimeoutStep :DINT := STEP_ERROR;
+	sequenceStepWidth :DINT := 1;
+	sequenceRequireSuccessStep :BOOL := FALSE;
+	
+	stepErrorStep :DINT := STEP_ERROR;
+	stepPauseEnabled :BOOL := FALSE;
+	stepSteppingEnabled :BOOL := FALSE;
+	stepTimeOut :TIME := T#0S;
+	stepCurrentStopRequestMode :CNM_CycleManagerInterfaces.StepStopRequestMode := CNM_CycleManagerInterfaces.StepStopRequestMode.IGNORE;
+	stepTimeoutStep :DINT := STEP_ERROR;
+	stepStepWidth :DINT := 1;
+END_VAR
+VAR
+	lastStepBeforePause : DINT;
+	lastStep : DINT;
+	
+	currentStep : DINT := CNM_ReturnTypes.DefaultSteps.STEP.IDLE;
+	nextStep : DINT := CNM_ReturnTypes.DefaultSteps.STEP.IDLE;
+	nextStepSpecifiedByUser :BOOL := FALSE;
+	lastExecute : BOOL;
+	externalExecute : BOOL;
+	currentState : CNM_ReturnTypes.SingleExecutionState := CNM_ReturnTypes.SingleExecutionState.IDLE;
+	wasError : BOOL;
+	wasTimeoutError : BOOL;
+	gotHereByError : BOOL;
+	stepLastCycle : DINT;
+	wasNotSuccess: BOOL;
+	wasSuccess: BOOL;
+	firstCycle : BOOL;
+	timeoutTimer : TON;
+	
+	//used for cycle time optimizations
+	registeredEnter : BOOL;
+	registeredCommand : BOOL;
+	registeredEval : BOOL;
+	registeredLeave : BOOL;	
+END_VAR
+VAR CONSTANT
+	STEP_IDLE :DINT := CNM_ReturnTypes.DefaultSteps.STEP.IDLE;
+	STEP_INIT :DINT := CNM_ReturnTypes.DefaultSteps.STEP.INIT;
+	STEP_ERROR :DINT := CNM_ReturnTypes.DefaultSteps.STEP.ERROR;
+	STEP_ABORT :DINT := CNM_ReturnTypes.DefaultSteps.STEP.ABORT;
+	STEP_PAUSE :DINT := CNM_ReturnTypes.DefaultSteps.STEP.PAUSE;
+	STEP_SUCCESS :DINT := CNM_ReturnTypes.DefaultSteps.STEP.SUCCESS;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+]]></ST>
+    </Implementation>
+    <Folder Name="Assertor" Id="{6508dab8-9ad3-449e-90d2-f33e17e2f23d}" />
+    <Folder Name="config" Id="{f7fe6a56-060e-4052-94ac-4806875d6a95}">
+      <Folder Name="defaults" Id="{49365529-45b0-4d6d-a4c5-427847fec121}" />
+      <Folder Name="step" Id="{044518e2-1fa3-415e-b6d5-f011d33af915}" />
+    </Folder>
+    <Folder Name="Errors" Id="{8b8fa45c-af98-4dd6-bf05-e7112a5147d8}" />
+    <Folder Name="ICycleManager" Id="{3a2bf34f-0f10-4eca-9272-1dd595d51eac}" />
+    <Folder Name="protected" Id="{ee216269-00ac-48f7-8f6b-6de74dd3d5a3}" />
+    <Folder Name="Steps" Id="{9219762d-50a8-47cc-88eb-492ea15ae3ec}" />
+    <Method Name="acknowledge" Id="{3eca993e-8530-4fc4-ba48-3013af35c775}" FolderPath="Errors\">
+      <Declaration><![CDATA[
+(*
+
+## Short summary
+This method acknowledges an error in the state machine and resets the current step to the step befor the error occured.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+{attribute 'hide'}
+METHOD acknowledge
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF(THIS^.gotHereByError)THEN
+	THIS^.next := THIS^.last;
+	THIS^.wasNotSuccess := FALSE;
+	THIS^.wasError := FALSE;
+	THIS^.wasTimeoutError := FALSE;
+	THIS^.wasSuccess := TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="assertionWasWrong" Id="{be71953c-ed01-49f3-aec2-0193acc08101}" FolderPath="Assertor\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method is called if an assertion was ``FALSE``
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2022 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+*)
+METHOD assertionWasWrong
+VAR_INPUT
+	(* caller object of the method *)
+	caller	: CNM_AbstractObject.IObject;
+	(* alarm message *)
+	message	: CNM_AssertionInterfaces.AssertMessage;
+	(* debugging information *)
+	additionalText	: Tc2_System.T_MaxString;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.wasError := TRUE;
+THIS^.wasSuccess := FALSE;
+THIS^.wasNotSuccess := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="configuration" Id="{38eee25d-ee93-42a6-83ca-edd29c7eba04}" FolderPath="config\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+An interface to provide configurations for cycle manager in a fluent way.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+PROPERTY configuration : CNM_CycleManagerInterfaces.ICycleManagerConfigurationScope
+]]></Declaration>
+      <Get Name="Get" Id="{9c2ee367-d7f1-4cc2-ba2a-996913677975}">
+        <Declaration><![CDATA[VAR_INST
+	configurator :CycleManagerConfigurator(THIS^, THIS^);
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[configuration := configurator;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="current" Id="{86a9da60-7c51-47c2-a053-c19947f9f9ee}" FolderPath="Steps\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property returns the current step of the cycle manager.
+Proposed use is as CASE control.
+
+### Example
+```
+CASE cyclemanager.steps.current OF
+DefaultSteps.STEP.IDLE:
+	;
+DefaultSteps.STEP.INIT:
+	;
+2:
+	;
+3:
+	;
+4:
+	;
+DefaultSteps.STEP.SUCCESS:
+	;
+DefaultSteps.STEP.ERROR:
+	;
+DefaultSteps.STEP.ABORT:
+	;
+ELSE ;
+END_CASE
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+{attribute 'hide'}
+PROPERTY current : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{bddaedd0-c1bc-4fe3-a2a0-04abda65c439}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[current := THIS^.currentStep;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6fb55603-bc19-47d0-ae3b-28d64d07a8bc}">
+        <Declaration><![CDATA[PRIVATE 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.currentStep := current;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="currentErrorStep" Id="{0c9e38b0-c14c-4cc9-8a36-320dff8392b3}" FolderPath="config\step\">
+      <Declaration><![CDATA[{attribute 'hide'}
+PROPERTY currentErrorStep : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{5364b894-6ab1-4369-90a5-141d0ea398a6}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[currentErrorStep := THIS^.stepErrorStep;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{fde72ff1-cb74-4100-9ead-9de98c06489e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.stepErrorStep := currentErrorStep;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="currentPauseEnabled" Id="{ce2e0c47-2eac-4a5d-ba31-e8745f720110}" FolderPath="config\step\">
+      <Declaration><![CDATA[{attribute 'hide'}
+PROPERTY currentPauseEnabled : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{cf3ab530-fcad-4e0f-a37e-aff37489b461}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[currentPauseEnabled := THIS^.stepPauseEnabled;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{55e2aabe-fc5e-40e9-8339-e981013e9579}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.stepPauseEnabled := currentPauseEnabled;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="currentSteppingEnabled" Id="{9eabf085-2941-466f-b844-98b7df31229d}" FolderPath="config\step\">
+      <Declaration><![CDATA[{attribute 'hide'}
+PROPERTY currentSteppingEnabled : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{66cb4fce-8f59-4033-8ef5-a8ba3848c2cd}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[currentSteppingEnabled := THIS^.stepSteppingEnabled;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2deab1a0-4865-47e5-8226-e784e7b47083}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.stepSteppingEnabled := currentSteppingEnabled;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="currentStepWidth" Id="{ad8c25db-02e6-4942-894a-55bb5f90decf}" FolderPath="config\step\">
+      <Declaration><![CDATA[{attribute 'hide'}
+PROPERTY currentStepWidth : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{816c9ac8-c259-461f-8ad9-e29de5f8cbed}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[currentStepWidth := THIS^.stepStepWidth;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{56e4ab57-74bd-4e90-8e29-1cd206fd4e76}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.stepStepWidth := currentStepWidth;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="currentStopRequestMode" Id="{e4a37bb8-b1aa-427d-9899-8fb04b4c8465}" FolderPath="config\step\">
+      <Declaration><![CDATA[{attribute 'hide'}
+PROPERTY currentStopRequestMode : CNM_CycleManagerInterfaces.StepStopRequestMode
+]]></Declaration>
+      <Get Name="Get" Id="{ac13af56-d8bd-44ab-9111-f9bdc365ded2}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[currentStopRequestMode := THIS^.stepCurrentStopRequestMode;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{5933b7d2-33fe-40b0-ba60-fab6c5176c4b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.stepCurrentStopRequestMode := currentStopRequestMode;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="currentTimeout" Id="{144a5160-4a45-490d-b795-abbda164aaf7}" FolderPath="config\step\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the maximum execution time for the current step. 
+The cycle manager will go into the error step after the time elapsed.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+{attribute 'hide'}
+PROPERTY currentTimeout : TIME
+]]></Declaration>
+      <Get Name="Get" Id="{bbb99ba0-a0cb-4e83-84ba-43bc7df02fd4}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[currentTimeout := THIS^.stepTimeOut;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{de5f18dd-6ac1-423a-b489-bc31394793d3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.stepTimeOut := currentTimeout;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="currentTimeoutStep" Id="{1c3d0f5a-90a4-4fb7-9e1b-0983aec59dc6}" FolderPath="config\step\">
+      <Declaration><![CDATA[{attribute 'hide'}
+PROPERTY currentTimeoutStep : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{c66b0f21-7ba3-48a6-adde-c59b70313eba}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF(THIS^.stepTimeoutStep <> THIS^.defaultTimeoutStep OR THIS^.stepTimeoutStep <> THIS^.defaultErrorStep)THEN
+	currentTimeoutStep := THIS^.stepTimeoutStep;	
+ELSE
+	currentTimeoutStep := THIS^.currentErrorStep;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{a2e050a3-5893-488f-9221-308a970d656e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.stepTimeoutStep := currentTimeoutStep;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="defaultErrorStep" Id="{d69e7961-2f16-4b89-976c-b9177a5dcd1e}" FolderPath="config\defaults\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property stes the next step in case of an error after a step change.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+{attribute 'hide'}
+PROPERTY defaultErrorStep : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{508803c8-2157-45ed-9c05-743ddde8631a}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[defaultErrorStep := THIS^.sequenceErrorStep;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2445a279-98ba-4f53-84db-8eafb9cd3fd6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.sequenceErrorStep := defaultErrorStep;
+THIS^.currentErrorStep := defaultErrorStep;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="defaultPauseEnabled" Id="{f3b3b0ab-0b3a-4287-a131-2dc0aa052a58}" FolderPath="config\defaults\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the default pause enabling state after a step change.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+{attribute 'hide'}
+PROPERTY defaultPauseEnabled : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{b15b9da6-fe4f-428b-b978-129bfbef0bb9}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[defaultPauseEnabled := THIS^.sequencePauseEnabled;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e4704ad1-7510-45b1-9736-d11005e4ce9c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.sequencePauseEnabled := defaultPauseEnabled;
+THIS^.currentPauseEnabled := defaultPauseEnabled;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="defaultRequireSuccessStep" Id="{8f83c82e-3913-4628-adf9-77eb77c7a712}" FolderPath="config\defaults\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Specifies whether the SUCCESS step of the state machine can be skipped when the transition condition to SUCCESS is already fulfilled.
+
+When set to false, the state machine immediately returns SUCCESS as soon as the transition condition to the SUCCESS state is met, 
+without executing the dedicated SUCCESS step. This optimization can save one execution cycle per state machine invocation, which is 
+especially beneficial in nested or complex state machine structures.
+
+When set to true, the SUCCESS step will always be executed at least once before the state machine returns SUCCESS. This is required 
+in cases where the SUCCESS step performs essential actions (e.g., resetting outputs, logging, or cleanup).
+
+The default value is false.
+
+Use Case:
+Use false when the SUCCESS step has no functional side effects and skipping it can improve performance.
+Use true when the SUCCESS step contains logic that must be executed explicitly.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+PROPERTY defaultRequireSuccessStep : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{7c3261aa-bc40-47d1-bb45-a7e1b859164e}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[defaultRequireSuccessStep := THIS^.sequenceRequireSuccessStep;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f0e454ba-7b2e-426d-b4c4-7e71d9cb4aae}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.sequenceRequireSuccessStep := defaultRequireSuccessStep;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="defaultSteppingEnabled" Id="{c77a62c3-6663-4ce6-b624-031edaa021ff}" FolderPath="config\defaults\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the default stepping mode configuration after a step change.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+{attribute 'hide'}
+PROPERTY defaultSteppingEnabled : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{ffb52f98-fac0-454f-8e9b-ad69c8af8db9}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[defaultSteppingEnabled := THIS^.sequenceSteppingEnabled;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{38cbbdfd-0f81-4eb7-8443-63a4d65280a9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.sequenceSteppingEnabled := defaultSteppingEnabled;
+THIS^.currentSteppingEnabled := defaultSteppingEnabled;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="defaultStepWidth" Id="{44145af9-05fd-4a74-b6f9-61c1f8a8244c}" FolderPath="config\defaults\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the default the step width.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+{attribute 'hide'}
+PROPERTY defaultStepWidth : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{b7edb333-0661-4f32-bd25-fd743dec49a8}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[defaultStepWidth := THIS^.sequenceStepWidth;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{87397639-afef-45ca-b560-57f26be1545e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.sequenceStepWidth := defaultStepWidth;
+THIS^.currentStepWidth := defaultStepWidth;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="defaultStopRequestMode" Id="{777ac0fe-ab7d-4b41-aad8-f3b580999ada}" FolderPath="config\defaults\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the default step mode configuration. 
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+{attribute 'hide'}
+PROPERTY defaultStopRequestMode : CNM_CycleManagerInterfaces.StepStopRequestMode
+]]></Declaration>
+      <Get Name="Get" Id="{c7e98599-e324-4a21-b765-5d64814aa25e}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[defaultStopRequestMode := THIS^.sequenceStopRequestMode;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f2c4c467-297f-4ce2-b577-3ace13505151}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.sequenceStopRequestMode := defaultStopRequestMode;
+THIS^.currentStopRequestMode := defaultStopRequestMode;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="defaultTimeout" Id="{30c59382-a003-425c-b50a-2af7dbff6b6b}" FolderPath="config\defaults\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the maximum execution time for steps. 
+The cycle manager will go into the timeoutStep after the time elapsed.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+{attribute 'hide'}
+PROPERTY defaultTimeout : TIME
+]]></Declaration>
+      <Get Name="Get" Id="{28e139d1-a253-44f0-bf93-cc8a9b116b92}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[defaultTimeout := THIS^.sequenceTimeOut;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{02e5b274-457d-46f1-a829-46b9d60f15c0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.sequenceTimeOut := defaultTimeout;
+THIS^.currentTimeout := defaultTimeout;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="defaultTimeoutStep" Id="{08bb7765-1d12-4c7e-8c78-618de981c5a5}" FolderPath="config\defaults\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the default step that will be set if the current step reaches a timeout. 
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+{attribute 'hide'}
+PROPERTY defaultTimeoutStep : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{e42bc9b1-335e-4170-9d43-d1d43b7a51cb}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[defaultTimeoutStep := THIS^.sequenceTimeoutStep;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d3650711-9c4a-4609-8724-d0ab55292f70}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.sequenceTimeoutStep := defaultTimeoutStep;
+THIS^.currentTimeoutStep := defaultTimeoutStep;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="enter" Id="{28872812-5eff-4b54-aaf6-4ce28b1e1b62}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method performs the given invoke only in the first cycle of the current step.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+*)
+METHOD enter
+VAR_INPUT
+	(* command to execute *)
+	invoke	:CNM_CommandInterfaces.ISingleAttempt;
+	(* step to proceed with in case of error *)
+	errorStep	:DINT := CNM_ReturnTypes.DefaultSteps.STEP.ERROR;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.registeredEnter := TRUE;
+
+RETURN (
+	THIS^.executeStep 
+	OR_ELSE THIS^.state <> CNM_ReturnTypes.SingleExecutionState.BUSY
+);
+
+IF (THIS^.isObjectNull(invoke) OR_ELSE (invoke.invoke() <> CNM_ReturnTypes.SingleExecutionResult.SUCCESS)) THEN
+	THIS^.wasError := TRUE;
+	THIS^.wasSuccess := FALSE;
+	IF ((errorStep <> CNM_ReturnTypes.DefaultSteps.STEP.ERROR) 
+		AND_THEN (errorStep <> THIS^.currentErrorStep)
+	) THEN
+		THIS^.currentErrorStep := errorStep;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="errors" Id="{cbf9c447-4041-4d3b-81c2-0690657df719}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property returns an ``ICycleError`` interface fluently to provide error handling methods.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY errors : CNM_CycleManagerInterfaces.ICycleError
+]]></Declaration>
+      <Get Name="Get" Id="{ea2a1517-0df9-4ac5-9f2a-5f3c4139ab7f}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[errors := THIS^;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="evaluate" Id="{8014ce81-4505-41cb-ad22-a1981d8bd067}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method evaluates an execution state to calculate the next step.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD evaluate
+VAR_INPUT
+	(* the state which is to be evaluated *)
+	state	:CNM_ReturnTypes.SingleExecutionState;
+	(* step to proceed with in case of error *)
+	errorStep	:DINT := CNM_ReturnTypes.DefaultSteps.STEP.ERROR;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.registeredEval := TRUE;
+
+RETURN ( 	
+		THIS^.wasError 
+	OR_ELSE 
+		(THIS^.state <> CNM_ReturnTypes.SingleExecutionState.BUSY)
+	OR_ELSE
+		NOT THIS^.executeStep
+);
+
+CASE state OF
+CNM_ReturnTypes.SingleExecutionState.ERROR, CNM_ReturnTypes.SingleExecutionState.ABORTED:
+	THIS^.wasError := TRUE;
+	THIS^.wasSuccess := FALSE;
+	IF ((errorStep <> CNM_ReturnTypes.DefaultSteps.STEP.ERROR) 
+		AND_THEN (errorStep <> THIS^.currentErrorStep)
+	) THEN
+		THIS^.currentErrorStep := errorStep;
+	END_IF
+CNM_ReturnTypes.SingleExecutionState.BUSY:
+	THIS^.wasNotSuccess := TRUE;
+	IF(NOT THIS^.wasError)THEN
+		THIS^.wasSuccess := FALSE;
+	END_IF
+CNM_ReturnTypes.SingleExecutionState.SUCCESS:
+	IF(NOT THIS^.wasError AND NOT THIS^.wasNotSuccess)THEN
+		THIS^.wasSuccess := TRUE;	
+	END_IF
+CNM_ReturnTypes.SingleExecutionState.IDLE, CNM_ReturnTypes.SingleExecutionState.PAUSED:
+	THIS^.wasNotSuccess := TRUE;
+	IF(NOT THIS^.wasError)THEN
+		THIS^.wasSuccess := FALSE;
+	END_IF
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="executeCommand" Id="{fe2a6303-5dcf-4215-ba88-018fff946858}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method performs the given command and evaluates the return value.
+The command will be called with execute := FALSE in the first cylce and with execute := TRUE in all following
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD executeCommand
+VAR_INPUT
+	(* command to execute *)
+	command :CNM_CommandInterfaces.ICommand;
+	(* step to proceed with in case of error *)
+	errorStep :DINT := CNM_ReturnTypes.DefaultSteps.STEP.ERROR;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.registeredCommand := TRUE;
+
+IF(THIS^.isObjectNull(command))THEN
+	THIS^.evaluate(CNM_ReturnTypes.SingleExecutionState.ERROR, errorStep);	
+ELSE
+	THIS^.evaluate(command.executeCommand(THIS^.executeStep), errorStep);	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="executeStep" Id="{1459dc10-209b-423f-8074-b703a90ef3cf}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property returns the execute flag for the current step, 
+which is FALSE in the first cycle of each step and TRUE after.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY executeStep :BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{c9c8eb8b-bacd-496a-98db-8798ed14e3ec}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[executeStep := THIS^.externalExecute;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="getStateFromStep" Id="{af81cd18-3e62-4700-a94a-f7098d846d5c}" FolderPath="protected\">
+      <Declaration><![CDATA[METHOD PROTECTED getStateFromStep : CNM_ReturnTypes.SingleExecutionState
+VAR_INPUT
+	step :DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE step OF
+STEP_ABORT:
+	getStateFromStep := CNM_ReturnTypes.SingleExecutionState.ABORTED;
+STEP_ERROR:
+	getStateFromStep := CNM_ReturnTypes.SingleExecutionState.ERROR;
+STEP_PAUSE:
+	getStateFromStep := CNM_ReturnTypes.SingleExecutionState.PAUSED;
+STEP_SUCCESS:
+	getStateFromStep := CNM_ReturnTypes.SingleExecutionState.SUCCESS;
+STEP_IDLE:
+	;
+STEP_INIT:
+	getStateFromStep := CNM_ReturnTypes.SingleExecutionState.BUSY;
+ELSE
+	//sequence is running
+	getStateFromStep := CNM_ReturnTypes.SingleExecutionState.BUSY;
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="handle" Id="{fb4d3ddc-45bb-4a27-81f7-5bcbed05db77}" FolderPath="Errors\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method throws an alarm and waits for it to be confirmed. 
+When the alarm was confirmed the cyclemanager will proceed to next configured step.
+If the current step is the result of an evaulated error state and the input 'resumeWithLastStep' is set to true, the cyclemanager will proceed to the last step.
+..warning:  The 'resumeWithLastStep' flag will be ignored if the last step was successful.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+METHOD handle
+VAR_INPUT
+	(* the alarm event that should be thrown *)
+	alarm :CNM_MessageInterfaces.IAlarm;
+	(* if this flag is set AND we got to the current step because of an ERROR state, then the cyclemanager will automatically will go back to the last step *)
+	resumeWithLastStep :BOOL := TRUE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF(NOT THIS^.executeStep)THEN
+	alarm.throw();
+ELSIF(NOT alarm.isPending)THEN
+	IF(resumeWithLastStep AND_THEN THIS^.gotHereByError)THEN
+		THIS^.acknowledge();
+	ELSE
+		THIS^.evaluate(state := CNM_ReturnTypes.SingleExecutionState.SUCCESS);
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="handleCycleManagerError" Id="{8165ad7e-5581-4ba6-9059-5ac24957aa48}" FolderPath="protected\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method handles the resume function of the cycle manager.
+Should be called befor all other handles.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD PROTECTED handleCycleManagerError
+VAR_INPUT
+	(*if true, will acknowledge error and return to previous step*)
+	resume :BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF(resume)THEN
+	THIS^.acknowledge();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="handleCycleManagerExecute" Id="{530db549-ace4-41c5-92e2-755b05b5931f}" FolderPath="protected\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method handles the execution of the cycle manager.
+Should be the first thing to do at the start of each cycle.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD PROTECTED handleCycleManagerExecute : BOOL
+VAR_INPUT
+	(*control bit to start or abort the cycle manager*)
+	execute :BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF(THIS^.lastExecute <> execute)THEN
+	IF(execute)THEN
+		//first cylce / init
+		THIS^.currentState := CNM_ReturnTypes.SingleExecutionState.BUSY;
+		THIS^.step.next := STEP_INIT;
+		THIS^.firstCycle := TRUE;
+	ELSE		
+		//falling execute / reset
+		IF(THIS^.currentState = CNM_ReturnTypes.SingleExecutionState.BUSY OR THIS^.currentState = CNM_ReturnTypes.SingleExecutionState.PAUSED)THEN
+			THIS^.currentState := CNM_ReturnTypes.SingleExecutionState.ABORTED;
+			THIS^.currentStep := STEP_ABORT;
+		ELSE
+			THIS^.currentStep := STEP_IDLE;	
+			THIS^.step.next := STEP_IDLE;	
+			THIS^.lastStep := STEP_IDLE;			
+		END_IF
+		THIS^.externalExecute := FALSE;
+	END_IF
+ELSIF(THIS^.currentStep = STEP_ABORT)THEN
+	//only one cycle in ABORT Step
+	THIS^.currentStep := STEP_IDLE;
+END_IF
+
+THIS^.lastExecute := execute;
+
+handleCycleManagerExecute := execute;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="handleCycleManagerPause" Id="{c12329da-33c5-4eed-91d4-8486e78973af}" FolderPath="protected\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method handles the pausing of the cycle manager. 
+Should be handled before updating.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD PROTECTED handleCycleManagerPause
+VAR_INPUT
+	(*if true and Pausing Enabled and busy will proceed with PAUSE*)
+	pause :BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF(NOT pause AND_THEN THIS^.currentState = CNM_ReturnTypes.SingleExecutionState.PAUSED)THEN
+	THIS^.currentStep := THIS^.lastStepBeforePause;
+END_IF
+
+RETURN (NOT THIS^.currentPauseEnabled);
+
+IF(
+	pause 
+	AND_THEN (NOT THIS^.wasError) 
+	AND_THEN (THIS^.currentState = CNM_ReturnTypes.SingleExecutionState.BUSY)
+)THEN
+	THIS^.lastStepBeforePause := THIS^.currentStep;
+	THIS^.currentStep := STEP_PAUSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="handleCycleManagerTimeout" Id="{bbc66314-ae57-4c95-897a-4df3555110b4}" FolderPath="protected\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method handles the timeout of the current step.
+Call at any point each cycle.
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD PROTECTED handleCycleManagerTimeout : BOOL
+VAR_INPUT
+	(* must be TRUE if stepping is enabled to proceed steps automatically *)
+	step :BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ((THIS^.currentState = CNM_ReturnTypes.SingleExecutionState.BUSY) AND (THIS^.currentTimeout > T#0S)) THEN
+	THIS^.timeoutTimer(
+		IN := (
+			(NOT THIS^.currentSteppingEnabled) 
+			OR 
+			(NOT step)
+		), 
+		PT := THIS^.currentTimeout,
+		Q => THIS^.wasTimeoutError
+	);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="handleStepChange" Id="{f418734f-3339-4477-a561-a0ee24a7824b}" FolderPath="protected\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method handles the step change, call early in handling.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD PROTECTED handleStepChange
+VAR_INPUT
+	(* must be TRUE if stepping is enabled to proceed steps automatically *)
+	step :BOOL := TRUE;
+	(*used for StopRequest evaluation if configured*)
+	stopRequest :BOOL := FALSE;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF THIS^.wasError THEN
+    THIS^.step.next := THIS^.currentErrorStep;
+    THIS^.initializeNewStep(TRUE);
+
+ELSIF THIS^.wasTimeoutError THEN
+    THIS^.step.next := THIS^.currentTimeoutStep;
+    THIS^.initializeNewStep(TRUE);
+
+ELSIF stopRequest AND (
+        (THIS^.wasSuccess AND NOT THIS^.wasNotSuccess AND (THIS^.executeStep OR NOT THIS^.isAnyActionRegistered)
+            AND THIS^.currentStopRequestMode = CNM_CycleManagerInterfaces.StepStopRequestMode.AFTER_SUCCESSFUL_STEP)
+     OR (THIS^.wasNotSuccess AND (THIS^.executeStep OR NOT THIS^.isAnyActionRegistered)
+            AND THIS^.currentStopRequestMode = CNM_CycleManagerInterfaces.StepStopRequestMode.ON_BUSY)
+     OR (THIS^.currentStopRequestMode = CNM_CycleManagerInterfaces.StepStopRequestMode.IMMEDIATE)
+) THEN
+    THIS^.step.next := STEP_SUCCESS;
+    THIS^.initializeNewStep();
+
+ELSIF THIS^.wasSuccess
+	AND NOT THIS^.wasNotSuccess 
+	AND (THIS^.executeStep OR NOT THIS^.isAnyActionRegistered)
+    AND (NOT THIS^.currentSteppingEnabled OR step) 
+THEN
+    THIS^.initializeNewStep();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="initializeNewStep" Id="{ff926e09-08d2-4640-89c2-6d4d0dbc7c25}" FolderPath="protected\">
+      <Declaration><![CDATA[METHOD PRIVATE initializeNewStep
+VAR_INPUT
+	errorStep :BOOL := FALSE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.gotHereByError := errorStep;
+THIS^.firstCycle := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="isAnyActionRegistered" Id="{8dd98195-cf2b-4074-832d-21d519c3b662}" FolderPath="protected\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This boolean is true when at least one of these actions are registered:
+- executeCommand
+- evaluate
+- leave
+
+The setter can be used to clear all the registered actions at once. 
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+
+PROPERTY PROTECTED isAnyActionRegistered : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{3c33e752-fd46-4e6b-b2a1-0b56d3f20f78}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isAnyActionRegistered := THIS^.registeredCommand OR THIS^.registeredLeave OR THIS^.registeredEval;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3eee91a2-2eab-4ed9-8d78-1ec5e459aa7c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[RETURN(isAnyActionRegistered); //dont set all the flags to true at once
+THIS^.registeredCommand := 
+THIS^.registeredEval := 
+THIS^.registeredLeave := isAnyActionRegistered; // only if isAnyActionRegistered is set to false
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="isInErrorStep" Id="{9f42069f-c2f6-4cfc-aef9-100c905f26ea}" FolderPath="Errors\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property returns TRUE if the step was reached by evaluating an error.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+{attribute 'hide'}
+PROPERTY isInErrorStep :BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{b35899f0-2d63-411f-820f-e558909bd019}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isInErrorStep := THIS^.gotHereByError;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="last" Id="{f1d14b8b-7243-4122-9776-7df92fa6498e}" FolderPath="Steps\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property returns the last step of the cycle manager, useful for error steps.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+### Example
+```
+TIMEOUT_STEP_FOR_RETRY:
+	cM.steps.next := cM.steps.last-1;
+	cM.waitFor(ACK);
+
+*)
+{attribute 'hide'}
+PROPERTY last : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{4a5e142a-95d9-46c9-ae5f-89e921548a7f}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[last := SEL(THIS^.currentStep = STEP_PAUSE, THIS^.lastStep, THIS^.lastStepBeforePause);
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{a391eafb-7a2b-44c2-8304-53b4610ada5e}">
+        <Declaration><![CDATA[PROTECTED
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.lastStep := last;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="leave" Id="{d1695d08-e2b2-48f6-91ef-52cd8438e2bb}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method performs the given invoke only in the last cycle of the current step.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD leave
+VAR_INPUT
+	(* command to execute *)
+	invoke	:CNM_CommandInterfaces.ISingleAttempt;
+	(* step to proceed with in case of error *)
+	errorStep	:DINT := CNM_ReturnTypes.DefaultSteps.STEP.ERROR; 
+	(* whether the invoke should be called even if there was an error in the current step *)
+	forceOnError	:BOOL := FALSE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.registeredLeave := TRUE;
+
+RETURN ((
+			((NOT wasSuccess) OR_ELSE THIS^.wasNotSuccess) 
+		AND 
+			NOT(forceOnError AND THIS^.wasError)
+		) 
+	OR 
+		THIS^.state <> CNM_ReturnTypes.SingleExecutionState.BUSY
+);
+
+IF(THIS^.isObjectNull(invoke) OR_ELSE invoke.invoke() <> CNM_ReturnTypes.SingleExecutionResult.SUCCESS)THEN
+	THIS^.evaluate(CNM_ReturnTypes.SingleExecutionState.ERROR, errorStep);	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="next" Id="{c1d03f67-dd21-4b2a-9788-84323d0761da}" FolderPath="Steps\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the next step of the cycle manager.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+### Example
+```
+MY_STEP:
+	cyclemanager.steps.next := SUCCESS_STEP;
+	cyclemanager.executeCommand(finalizeProcess);
+	
+*)
+{attribute 'hide'}
+PROPERTY next : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{7f8c4a03-12c8-4693-a2b7-acb5a025de59}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[next := SEL(THIS^.nextStepSpecifiedByUser, THIS^.currentStep + THIS^.currentStepWidth, THIS^.nextStep);
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{fb42c9c9-4095-45d5-b6c1-371b4d79a887}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.nextStep := next;
+THIS^.nextStepSpecifiedByUser := TRUE;
+
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="proceed" Id="{0518105d-d4cd-4fe9-ad2e-ecb16b85e6f7}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method changes the current step in the cycle manager to the next in order (current + stepWidth) .
+If any evaluate or other call is still busy it will ignore them and change to the next step.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD proceed
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[RETURN (THIS^.state = CNM_ReturnTypes.SingleExecutionState.SUCCESS);
+
+THIS^.wasNotSuccess := FALSE;
+THIS^.wasSuccess := TRUE;
+THIS^.isAnyActionRegistered := FALSE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="proceedWith" Id="{1b4d17c5-2ec7-4cc4-bbcf-0a151536b5c2}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method changes the current step in the cycle manager to the given step.
+If any evaluate or other call is still busy it will ignore them and move to the next step.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD proceedWith
+VAR_INPUT
+	(* step to move to *)
+	step	:DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[RETURN (THIS^.state = CNM_ReturnTypes.SingleExecutionState.SUCCESS);
+
+THIS^.step.next := step;
+THIS^.proceed();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resetCurrentStepParametersToDefaults" Id="{f877d5bb-f145-465e-aeda-6e88b39304db}" FolderPath="protected\">
+      <Declaration><![CDATA[METHOD PROTECTED resetCurrentStepParametersToDefaults
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.currentErrorStep := THIS^.defaultErrorStep;
+THIS^.currentPauseEnabled := THIS^.defaultPauseEnabled;
+THIS^.currentSteppingEnabled := THIS^.defaultSteppingEnabled;
+THIS^.currentStepWidth := THIS^.defaultStepWidth;
+THIS^.currentStopRequestMode := THIS^.defaultStopRequestMode;
+THIS^.currentTimeoutStep := THIS^.defaultTimeoutStep;
+THIS^.currentTimeout := THIS^.defaultTimeout;	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resetInternalVariables" Id="{fef106fe-382a-4c28-b2f0-eac600379abd}" FolderPath="protected\">
+      <Declaration><![CDATA[METHOD PROTECTED resetInternalVariables
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.registeredCommand := FALSE;
+THIS^.registeredEnter := FALSE;
+THIS^.registeredEval := FALSE;
+THIS^.registeredLeave := FALSE;	
+THIS^.wasError := FALSE;
+THIS^.wasTimeoutError := FALSE;
+THIS^.wasNotSuccess := FALSE;
+THIS^.wasSuccess := FALSE;
+THIS^.firstCycle := FALSE;
+THIS^.nextStepSpecifiedByUser := FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="state" Id="{e7969c8f-f4bd-46dc-838c-23ae907bf0dd}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property returns the current state of the cycle manager according to its step.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY state : CNM_ReturnTypes.SingleExecutionState
+]]></Declaration>
+      <Get Name="Get" Id="{51cad091-e8c1-478f-96f2-f5ef8397a3c3}">
+        <Declaration><![CDATA[VAR CONSTANT
+	WAITING : DINT := 42;
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF(
+	NOT THIS^.sequenceRequireSuccessStep
+	AND_THEN NOT THIS^.wasError 
+	AND_THEN wasSuccess 
+	AND_THEN (THIS^.executeStep OR NOT(THIS^.registeredEval OR THIS^.registeredCommand OR THIS^.registeredLeave))
+	AND_THEN THIS^.step.next = STEP_SUCCESS
+)THEN
+	//this allows the cycle manager to return SUCCESS one cycle earlier, saving many cycles in nested use
+	THIS^.currentState := CNM_ReturnTypes.SingleExecutionState.SUCCESS;
+END_IF
+
+state := THIS^.currentState;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{13e49b80-7825-4d13-b384-9ac369628d5a}">
+        <Declaration><![CDATA[PROTECTED 
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.currentState := state;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="step" Id="{7be67d05-dc27-4718-8761-9c0cb420c090}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property returns the current, next and last step of the cycle manager via fluent interface with the ``ICylceSteps`` interfaces
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY step : CNM_CycleManagerInterfaces.ICycleSteps
+]]></Declaration>
+      <Get Name="Get" Id="{9709475d-1451-470e-8a2e-88fb5a8d28d5}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[step := THIS^;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="update" Id="{f3ca0071-adf4-4c4c-8551-be8f6724073e}" FolderPath="protected\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method handles all updates of the cycle manager.
+Should be called first each cycle befor evaluating the steps and only once per cycle!
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD update
+VAR_INPUT
+	(*control bit to start or abort the cycle manager*)
+	execute :BOOL;
+	(*used for StopRequest evaluation if configured*)
+	stopRequest :BOOL := FALSE;
+	(*if true and Pausing Enabled and busy will proceed with PAUSE*)
+	pause :BOOL := FALSE;
+	(*if true, will acknowledge error and return to previous step*)
+	resume :BOOL := FALSE;
+	(* must be TRUE if stepping is enabled to proceed steps automatically *)
+	stepControl :BOOL := TRUE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[RETURN (NOT THIS^.handleCycleManagerExecute(execute));
+THIS^.handleCycleManagerError(resume);
+THIS^.handleStepChange(stepControl, stopRequest);
+THIS^.handleCycleManagerPause(pause);
+THIS^.handleCycleManagerTimeout(stepControl);
+THIS^.updateCycleManager();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="updateCycleManager" Id="{5938120f-5baa-41df-857f-38759da8e975}" FolderPath="protected\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method updates the step and state of the cycle manager.
+Should be called after all handles each cycle.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD PROTECTED updateCycleManager
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.externalExecute := NOT THIS^.firstCycle;
+
+IF (THIS^.firstCycle AND_THEN (THIS^.currentStep <> CNM_ReturnTypes.DefaultSteps.STEP.SUCCESS)) THEN
+	THIS^.timeoutTimer(IN := FALSE);
+	
+	THIS^.last := THIS^.currentStep;
+	THIS^.currentStep := THIS^.step.next;
+	
+	THIS^.resetInternalVariables();
+	THIS^.resetCurrentStepParametersToDefaults();
+END_IF
+
+//Set State for external use
+THIS^.state := getStateFromStep(THIS^.currentStep);
+
+THIS^.wasError := FALSE;
+THIS^.wasNotSuccess := FALSE;
+THIS^.wasSuccess := FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="waitFor" Id="{3544ee7e-949d-4b9b-baf9-ff9da311526c}" FolderPath="ICycleManager\">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method waits for a boolean signal until the step can be changed. 
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD waitFor
+VAR_INPUT
+	(* the value to wait for *)
+	value	:BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[RETURN (THIS^.state <> CNM_ReturnTypes.SingleExecutionState.BUSY);
+
+THIS^.registeredEval := TRUE;
+
+IF(value)THEN
+	IF(NOT wasError)THEN
+		THIS^.wasSuccess := TRUE;
+	END_IF
+ELSE
+	THIS^.wasNotSuccess := TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

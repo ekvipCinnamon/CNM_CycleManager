@@ -1,0 +1,267 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="CycleManagerDefaultPausing" Id="{4f40ed2e-e312-4c4a-9b2f-64ba0805ce65}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+A class to provide fluent access to the default sequence pausing configuration of a cycle manager.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+FUNCTION_BLOCK INTERNAL CycleManagerDefaultPausing IMPLEMENTS CNM_CycleManagerInterfaces.IPauseConfiguration
+VAR
+	parameters :CNM_CycleManagerInterfaces.ICycleManagerDefaultParameters;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="cycleManager" Id="{6836b3d4-c834-4b43-9c84-1c3fe15240c2}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Gets or sets the cycle manager default parameters interface used for pause configuration.
+
+### Purpose and usage
+This property provides access to the underlying cycle manager default parameters interface
+that this pause configurator operates on. It allows getting the current cycle manager instance
+and setting a new one if needed.
+
+The property is primarily used internally but can be accessed for direct parameter manipulation
+or when switching between different cycle manager instances.
+
+### typical usage patterns
+1. **Internal initialization**: Set during configurator setup
+2. **Runtime switching**: Change cycle manager instances
+3. **Direct access**: Get parameters for advanced configuration
+4. **Dependency injection**: Inject different implementations
+
+### When to use
+- During initialization to connect to a cycle manager
+- When switching between different cycle manager implementations
+- For direct access to pause-related parameters
+- In advanced configuration scenarios
+
+### Example
+```
+// Get current cycle manager
+VAR
+    currentManager : ICycleManagerDefaultParameters;
+END_VAR
+
+currentManager := pauseConfig.cycleManager;
+
+// Check current pause state
+IF currentManager.defaultPauseEnabled THEN
+    // Pause is enabled
+END_IF;
+
+// Set new cycle manager
+VAR
+    newManager : MyCycleManagerImplementation;
+END_VAR
+
+pauseConfig.cycleManager := newManager;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY cycleManager : CNM_CycleManagerInterfaces.ICycleManagerDefaultParameters]]></Declaration>
+      <Get Name="Get" Id="{a48e1f71-38c3-4af4-9708-b34be0d6d53a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[cycleManager := THIS^.parameters;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{a1afe100-e63b-4663-a93a-dbda2a06d05d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.parameters := cycleManager;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="disable" Id="{83cf7526-7cb7-4008-b071-d1725fa03402}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Disables pause functionality for the cycle manager sequence.
+
+### Purpose and usage
+This method disables the pause functionality for the entire cycle manager sequence.
+When pause is disabled, pause requests will be ignored and the cycle will continue
+running without interruption.
+
+Disabling pause is useful for:
+- Critical operations that must not be interrupted
+- Production mode where pausing is not desired
+- Automated sequences that should run to completion
+- Safety-critical procedures
+
+### typical usage patterns
+1. **Production mode**: Disable pause in normal operation
+2. **Critical sequences**: Prevent interruption of important operations
+3. **Automated runs**: Ensure uninterrupted execution
+4. **Safety procedures**: Prevent unsafe pausing
+
+### When to use
+- In production environments where pausing should not be allowed
+- During critical operations that must complete
+- For automated sequences that should not be interrupted
+- When implementing safety-critical procedures
+
+### Example
+```
+// Disable pause for production
+cycleManager.configuration.configuration.sequence
+    .pause
+    .disable();
+
+// Temporarily disable pause for critical operation
+CASE cycleManager.steps.current OF
+    MySteps.CRITICAL_START:
+        cycleManager.configuration.configuration.sequence
+            .pause.disable();
+        cycleManager.steps.next := MySteps.CRITICAL_OPERATION;
+        
+    MySteps.CRITICAL_END:
+        cycleManager.configuration.configuration.sequence
+            .pause.enable();  // Re-enable after critical section
+        cycleManager.steps.next := MySteps.NORMAL_OPERATION;
+END_CASE
+
+// Check if pause is disabled
+IF NOT cycleManager.pauseEnabled THEN
+    HMI.PauseButton.Enabled := FALSE;
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD disable
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.defaultPauseEnabled := FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enable" Id="{3024dd7e-95bf-48c5-ba22-30d566bc6d1b}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Enables pause functionality for the cycle manager sequence.
+
+### Purpose and usage
+This method enables the pause functionality for the entire cycle manager sequence.
+When pause is enabled, the cycle can be paused at appropriate points, allowing operators
+to temporarily halt execution and resume later.
+
+Enabling pause is useful for:
+- Manual control during commissioning
+- Debugging and troubleshooting
+- Operator-controlled production
+- Training and demonstration
+
+### typical usage patterns
+1. **Commissioning mode**: Enable pause for manual control
+2. **Debug mode**: Allow pausing for troubleshooting
+3. **Training**: Enable pause for step-by-step demonstration
+4. **Semi-automatic mode**: Operator-controlled execution
+
+### When to use
+- During commissioning and testing phases
+- In debug or maintenance modes
+- For operator training scenarios
+- When manual intervention might be needed
+- In semi-automatic operation modes
+
+### Example
+```
+// Enable pause for commissioning
+cycleManager.configuration.configuration.sequence
+    .pause
+    .enable();
+
+// Enable pause based on operation mode
+IF commissioningMode OR debugMode THEN
+    cycleManager.configuration.configuration.sequence
+        .pause.enable();
+ELSE
+    cycleManager.configuration.configuration.sequence
+        .pause.disable();
+END_IF;
+
+// Use with HMI controls
+IF cycleManager.pauseEnabled THEN
+    HMI.PauseButton.Enabled := TRUE;
+    HMI.ResumeButton.Enabled := cycleManager.isPaused;
+END_IF;
+
+// Handle pause request
+IF HMI.PauseButton.Pressed AND cycleManager.pauseEnabled THEN
+    cycleManager.requestPause();
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD enable
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.defaultPauseEnabled := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

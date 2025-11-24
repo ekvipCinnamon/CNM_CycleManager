@@ -1,0 +1,95 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="SimpleCycleManager" Id="{7625fde4-248d-4e82-a884-39cfee5f0a69}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+An implementation of the ``ISinlgeExecutionCycleManager`` to provide simple cycle managment for steps in state machines.
+The body NEEDS to be called at the start of every cycle (before using the step property) ONLY ONCE.
+
+.. <info>
+If used in the same step, the order of method calls should be this:
+configurations
+enter
+executeCommand
+evaluate
+waitFor
+proceed
+proceedWith
+acknowledge
+leave
+.. </info>
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+FUNCTION_BLOCK SimpleCycleManager EXTENDS AbstractCycleManager
+VAR_INPUT
+	(*control bit to start or abort the cycle manager*)
+	execute :BOOL;
+	(*used for StopRequest evaluation if configured*)
+	stopRequest :BOOL := FALSE;
+	(*if true and Pausing Enabled and busy will proceed with PAUSE*)
+	pause :BOOL := FALSE;
+	(*if true, will acknowledge error and return to previous step*)
+	resume :BOOL := FALSE;
+	(* must be TRUE if stepping is enabled to proceed steps automatically *)
+	stepControl :BOOL := TRUE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[THIS^.update(
+	execute := execute, 
+	pause := pause, 
+	resume := resume, 
+	stepControl := stepControl, 
+	stopRequest := stopRequest
+);
+]]></ST>
+    </Implementation>
+    <Property Name="className" Id="{fa19b843-eb5b-4493-bbe8-50b1a509fd78}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This abstract property returns the class name of the concrete object, 
+which is useful for logging/debugging purpose or to check the class name
+for ``__DELETE`` in factories (sometimes it's necessary to do more 
+than just to free the memory).
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2022 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY className : CNM_AbstractObject.ClassName
+]]></Declaration>
+      <Get Name="Get" Id="{5fa77345-bcf8-4ec1-9c15-ed1b0f7957ed}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[className := 'CNM_CycleManager.SimpleCycleManager';
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

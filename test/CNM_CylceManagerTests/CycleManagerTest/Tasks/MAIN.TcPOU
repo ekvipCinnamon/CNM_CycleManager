@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{2c063c6d-39bb-4d22-8b03-82600500862b}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	cycleManager :CNM_CycleManager.SimpleCycleManager;
+	interfaceTests :CNM_CycleManagerInterfacesTests.InterfaceTests(cycleManager);
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[TcUnit.RUN();]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

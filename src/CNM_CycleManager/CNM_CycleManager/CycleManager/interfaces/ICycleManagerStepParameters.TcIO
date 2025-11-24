@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <Itf Name="ICycleManagerStepParameters" Id="{5fd85db7-8dca-4b4c-bf21-26014628826b}">
+    <Declaration><![CDATA[(*
+
+## Short summary
+An interface to provide configurations for cycle manager steps.
+Used internally to allow better fluent implementation.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+INTERFACE INTERNAL ICycleManagerStepParameters EXTENDS __System.IQueryInterface
+]]></Declaration>
+    <Property Name="currentErrorStep" Id="{65d183e5-c0b6-4aea-b7a2-d27dc7ce9450}">
+      <Declaration><![CDATA[PROPERTY currentErrorStep : DINT]]></Declaration>
+      <Set Name="Set" Id="{caa0b043-d1cd-423c-8f4d-f2bf68b0029e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="currentPauseEnabled" Id="{aed7e065-6f03-4e8b-88c8-55871102c280}">
+      <Declaration><![CDATA[PROPERTY currentPauseEnabled : BOOL]]></Declaration>
+      <Set Name="Set" Id="{270f9e99-f450-4f14-9a07-cce942922dfd}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="currentSteppingEnabled" Id="{30211155-87f9-4899-bf47-99958d943402}">
+      <Declaration><![CDATA[PROPERTY currentSteppingEnabled : BOOL]]></Declaration>
+      <Set Name="Set" Id="{711f4f81-8407-4fe4-a4af-e3076d0962c9}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="currentStepWidth" Id="{5f8d236a-45af-4e6e-a44e-e4f099111d69}">
+      <Declaration><![CDATA[PROPERTY currentStepWidth : DINT]]></Declaration>
+      <Set Name="Set" Id="{e59d0c31-506f-41d6-8815-fa0f3c2e4ccd}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="currentStopRequestMode" Id="{264aa1b0-d87e-4301-ab6c-77034040f6ab}">
+      <Declaration><![CDATA[PROPERTY currentStopRequestMode :CNM_CycleManagerInterfaces.StepStopRequestMode]]></Declaration>
+      <Set Name="Set" Id="{9fcdf647-e480-4225-be91-3725941f178e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="currentTimeout" Id="{ace83772-6f6b-4247-b50a-1841dba3ef52}">
+      <Declaration><![CDATA[PROPERTY currentTimeout : TIME]]></Declaration>
+      <Set Name="Set" Id="{ec393d65-b88f-4f92-8fa9-341ecfdfff33}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="currentTimeoutStep" Id="{d9ca41eb-73dd-47e4-b5e4-673117fc2e76}">
+      <Declaration><![CDATA[PROPERTY currentTimeoutStep : DINT]]></Declaration>
+      <Set Name="Set" Id="{5dac76aa-5be4-4954-83f9-8d430b54903e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+  </Itf>
+</TcPlcObject>

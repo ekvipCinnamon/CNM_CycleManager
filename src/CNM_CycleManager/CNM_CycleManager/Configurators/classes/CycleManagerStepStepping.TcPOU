@@ -1,0 +1,277 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="CycleManagerStepStepping" Id="{ee5c5149-014e-4eab-8abe-c7b399b1e9dc}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+A class to provide fluent access to the current step stepping configuration of a cycle manager.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+FUNCTION_BLOCK INTERNAL CycleManagerStepStepping IMPLEMENTS CNM_CycleManagerInterfaces.ISteppingConfiguration
+VAR
+	parameters :ICycleManagerStepParameters;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="cycleManager" Id="{a71f9e39-d344-4528-81f9-d29f7bea3d04}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Gets or sets the cycle manager step parameters interface used for stepping configuration.
+
+### Purpose and usage
+This property provides access to the underlying cycle manager step parameters interface
+that this stepping configurator operates on. It allows getting the current cycle manager instance
+and setting a new one if needed for step-specific stepping configuration.
+
+The property is primarily used internally but can be accessed for direct parameter manipulation
+or when switching between different cycle manager instances at the step level.
+
+### typical usage patterns
+1. **Internal initialization**: Set during configurator setup
+2. **Runtime switching**: Change cycle manager instances
+3. **Direct access**: Get parameters for advanced step configuration
+4. **Dependency injection**: Inject different implementations
+
+### When to use
+- During initialization to connect to a cycle manager
+- When switching between different cycle manager implementations
+- For direct access to step-specific stepping parameters
+- In advanced configuration scenarios for individual steps
+
+### Example
+```
+// Get current cycle manager
+VAR
+    currentManager : ICycleManagerStepParameters;
+END_VAR
+
+currentManager := stepSteppingConfig.cycleManager;
+
+// Check current step stepping state
+IF currentManager.currentSteppingEnabled THEN
+    // Stepping is enabled for current step
+END_IF;
+
+// Set new cycle manager
+VAR
+    newManager : MyCycleManagerStepImplementation;
+END_VAR
+
+stepSteppingConfig.cycleManager := newManager;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY cycleManager : ICycleManagerStepParameters]]></Declaration>
+      <Get Name="Get" Id="{acf88da2-cfb4-40bf-a801-10392735c7e4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[cycleManager := THIS^.parameters;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9df411b3-f193-42db-8b9b-4dd36adb000a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.parameters := cycleManager;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="disable" Id="{5b5b15cb-e8d4-49ab-8cec-8e9dd6674f41}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Disables stepping mode for the current cycle manager step.
+
+### Purpose and usage
+This method disables the stepping mode functionality for the current step only, overriding
+the sequence default. When stepping is disabled for a step, it runs continuously without
+requiring manual step triggers, even if the sequence has stepping enabled.
+
+Disabling stepping at the step level is useful for:
+- Automated calculations or operations within a stepped sequence
+- Time-critical steps that should not wait for triggers
+- Background operations that run automatically
+- Steps that should always complete without manual intervention
+
+### typical usage patterns
+1. **Auto steps**: Steps that run automatically in stepped sequences
+2. **Calculations**: Automated computation steps
+3. **Fast operations**: Quick steps that don't need manual control
+4. **Override sequence**: Disable stepping for specific steps only
+
+### When to use
+- For automated steps within a manually stepped sequence
+- When specific steps should run without manual triggers
+- For calculation or processing steps
+- To skip stepping on non-interactive steps
+
+### Example
+```
+// Disable stepping for calculation step
+CASE cycleManager.steps.current OF
+    MySteps.MANUAL_SETUP:
+        // This step uses sequence stepping settings
+        IF setupComplete THEN
+            cycleManager.steps.next := MySteps.AUTO_CALCULATION;
+        END_IF;
+        
+    MySteps.AUTO_CALCULATION:
+        // Disable stepping for this automated step
+        cycleManager.configuration.configuration.step
+            .stepping.disable();
+        performCalculations();
+        IF calculationsComplete THEN
+            // Re-enable stepping for next manual step
+            cycleManager.configuration.configuration.step
+                .stepping.enable();
+            cycleManager.steps.next := MySteps.VERIFY_RESULTS;
+        END_IF;
+END_CASE
+
+// Skip stepping for fast operations
+IF isQuickOperation(currentStep) THEN
+    cycleManager.configuration.configuration.step
+        .stepping.disable();
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD disable
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.currentSteppingEnabled := FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="enable" Id="{4f11f1ee-fc66-4d4e-9d2d-a17d2d4d90ee}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Enables stepping mode for the current cycle manager step.
+
+### Purpose and usage
+This method enables the stepping mode functionality for the current step only, overriding
+the sequence default if necessary. When stepping is enabled for a step, execution pauses
+after entering the step, requiring manual trigger or auto-step delay before proceeding.
+
+Enabling stepping at the step level is useful for:
+- Critical steps requiring verification in automated sequences
+- Decision points where operator input is needed
+- Steps where results should be inspected
+- Debugging specific steps in production sequences
+
+### typical usage patterns
+1. **Verification steps**: Force stepping for result checking
+2. **Decision points**: Require manual confirmation
+3. **Critical operations**: Enable stepping for careful execution
+4. **Override sequence**: Enable stepping for specific steps only
+
+### When to use
+- For steps requiring operator verification or decision
+- During critical operations needing manual control
+- At inspection or quality check points
+- When specific steps should use stepping regardless of sequence settings
+
+### Example
+```
+// Enable stepping for verification step
+CASE cycleManager.steps.current OF
+    MySteps.PERFORM_OPERATION:
+        // Normal automated execution
+        IF operationComplete THEN
+            cycleManager.steps.next := MySteps.VERIFY_RESULTS;
+        END_IF;
+        
+    MySteps.VERIFY_RESULTS:
+        // Force stepping for manual verification
+        cycleManager.configuration.configuration.step
+            .stepping.enable();
+        displayResults();
+        // Operator must trigger next step manually
+        IF resultsApproved THEN
+            cycleManager.steps.next := MySteps.CONTINUE;
+        END_IF;
+END_CASE
+
+// Conditionally enable stepping
+IF criticalOperation OR requiresInspection THEN
+    cycleManager.configuration.configuration.step
+        .stepping.enable();
+END_IF;
+
+// Force stepping in production for specific steps
+IF isQualityCheckStep(currentStep) AND productionMode THEN
+    cycleManager.configuration.configuration.step
+        .stepping.enable();  // Override sequence default
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+*)
+METHOD enable
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.currentSteppingEnabled := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

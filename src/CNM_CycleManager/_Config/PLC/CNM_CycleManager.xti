@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<TcSmItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.17" ClassName="CNestedPlcProjDef">
+	<Project GUID="{61473AA3-D918-4ED0-AA91-DA4EAB70B250}" Name="CNM_CycleManager" PrjFilePath="..\..\CNM_CycleManager\CNM_CycleManager.plcproj" TmcFilePath="..\..\CNM_CycleManager\CNM_CycleManager.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
+		<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{CA450F4D-82FD-8AE2-D3B9-7B17A883E659}" TmcPath="CNM_CycleManager\CNM_CycleManager.tmc">
+			<Name>CNM_CycleManager Instance</Name>
+			<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+		</Instance>
+	</Project>
+</TcSmItem>

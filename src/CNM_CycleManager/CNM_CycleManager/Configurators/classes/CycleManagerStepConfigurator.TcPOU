@@ -1,0 +1,841 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="CycleManagerStepConfigurator" Id="{807729c2-4af1-483f-935b-677f6cd2fe24}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+A class to provide fluent access to the current step configuration of a cycle manager.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+FUNCTION_BLOCK INTERNAL CycleManagerStepConfigurator IMPLEMENTS CNM_CycleManagerInterfaces.IStepConfiguration, CNM_CycleManagerInterfaces.IStopRequestConfiguration
+VAR
+	parameters :ICycleManagerStepParameters;
+	pauserator :CycleManagerStepPausing();
+	steperator :CycleManagerStepStepping();
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="afterSuccessfulStep" Id="{25b7ee02-2ec3-4e30-8308-cf87fff55804}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Sets the stop request behavior to execute after successful step completion for the current step.
+
+### Purpose and usage
+This method configures the current step to process stop requests only after the step has completed successfully.
+This setting overrides the sequence default for this specific step. When this mode is active, stop requests
+received during step execution will be deferred until the step completes with success.
+
+This ensures that the specific step completes successfully before the cycle is stopped,
+maintaining data integrity and process consistency for critical operations.
+
+### typical usage patterns
+1. **Critical steps**: Ensure specific steps complete before stopping
+2. **Transaction steps**: Finish data transactions cleanly
+3. **Safety operations**: Complete safety-critical steps
+4. **Production steps**: Avoid partial operations on key steps
+
+### When to use
+- For steps that must complete successfully before stopping
+- When specific operations should not be interrupted
+- For data consistency in critical steps
+- To override sequence defaults for important steps
+
+### Example
+```
+// Configure specific step for safe stopping
+cycleManager.configuration.configuration.step
+    .stopRequest
+    .afterSuccess();
+
+// Apply to critical step during configuration
+CASE cycleManager.steps.current OF
+    MySteps.INIT:
+        // Configure next critical step
+        cycleManager.configuration.configuration.step
+            .timeout := T#10S;
+        cycleManager.configuration.configuration.step
+            .stopRequest.afterSuccess();
+        cycleManager.steps.next := MySteps.CRITICAL_WRITE;
+        
+    MySteps.CRITICAL_WRITE:
+        // This step will complete before stop is processed
+        IF writeCriticalData() THEN
+            cycleManager.steps.next := MySteps.NEXT_STEP;
+        END_IF;
+END_CASE
+```
+
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD afterSuccessfulStep
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.currentStopRequestMode := CNM_CycleManagerInterfaces.StepStopRequestMode.AFTER_SUCCESSFUL_STEP;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="cycleManager" Id="{2b49ec4f-4b68-4c69-9de0-4aca8634a205}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Gets or sets the cycle manager step parameters interface used by this configurator.
+
+### Purpose and usage
+This property provides access to the underlying cycle manager step parameters interface.
+It allows getting the current cycle manager instance and setting a new one if needed.
+
+When setting a new cycle manager, all internal configurators (stepping and pausing)
+are automatically updated to use the new instance. This property manages step-specific
+parameters that override sequence defaults.
+
+### typical usage patterns
+1. **Initialization**: Set during configurator creation
+2. **Runtime changes**: Switch cycle manager instances
+3. **Access parameters**: Get current cycle manager for direct access
+4. **Step-specific config**: Access step-level parameters
+
+### When to use
+- During initialization to set the cycle manager
+- When switching between different cycle manager implementations
+- For direct access to step-specific parameters
+- In factory patterns for dynamic configuration
+
+### Example
+```
+// Get current cycle manager
+VAR
+    currentManager : ICycleManagerStepParameters;
+END_VAR
+
+currentManager := stepConfigurator.cycleManager;
+
+// Set new cycle manager
+VAR
+    newManager : MyCycleManagerStepImplementation;
+END_VAR
+
+stepConfigurator.cycleManager := newManager;
+// All sub-configurators now use newManager
+
+// Direct parameter access
+IF stepConfigurator.cycleManager.currentTimeout > T#5S THEN
+    // Handle long timeout for current step
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+*)
+PROPERTY cycleManager : ICycleManagerStepParameters]]></Declaration>
+      <Get Name="Get" Id="{228f0a38-f4dc-43fa-99e1-d3bb207bad7f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[cycleManager := THIS^.parameters;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0f6e72c5-bf83-469d-8ba3-d85ea3d1cdfb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.parameters := cycleManager;
+THIS^.steperator.cycleManager := THIS^.cycleManager;
+THIS^.pauserator.cycleManager := THIS^.cycleManager;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="errorStep" Id="{06fb1365-f46e-48d4-ba51-e638771abdc6}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the next step in case of an error.
+Is reset to the default ERROR_STEP when the current step changes.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY errorStep : DINT
+]]></Declaration>
+      <Set Name="Set" Id="{ba04b002-9a54-4685-9adb-ce0dcc589315}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.cycleManager.currentErrorStep := errorStep;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="FB_Init" Id="{d1ca3d04-c995-4b64-b684-1d7f99d7d73a}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Initializes the CycleManagerStepConfigurator and its sub-configurators.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)   
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.steperator.cycleManager := THIS^.cycleManager;
+THIS^.pauserator.cycleManager := THIS^.cycleManager;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ignore" Id="{9ec6f5d4-38d3-4675-b329-6dc94c943b0c}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Sets the stop request behavior to ignore all stop requests for the current step.
+
+### Purpose and usage
+This method configures the current step to completely ignore all stop requests.
+This setting overrides the sequence default for this specific step. When this mode
+is active, stop requests will not be processed at all during this step, and the
+step will continue running until completion or error.
+
+This mode should be used with extreme caution as it prevents normal stopping
+mechanisms from working for the specific step.
+
+### typical usage patterns
+1. **Atomic operations**: Steps that must complete without interruption
+2. **Safety sequences**: Emergency procedures for specific steps
+3. **Critical writes**: Database or file operations that cannot be stopped
+4. **Hardware operations**: Steps controlling physical processes
+
+### When to use
+- For step-specific critical operations that must complete
+- During safety-critical step sequences
+- For atomic operations within a larger sequence
+- When a specific step must ignore stop requests
+- Use with extreme caution - limits operator control
+
+### Example
+```
+// Configure specific step to ignore stops
+cycleManager.configuration.configuration.step
+    .stopRequest
+    .ignore();
+
+// Apply to critical hardware operation
+CASE cycleManager.steps.current OF
+    MySteps.PREPARE_CRITICAL:
+        // Configure next step to ignore stops
+        cycleManager.configuration.configuration.step
+            .stopRequest.ignore();
+        cycleManager.steps.next := MySteps.CRITICAL_HARDWARE_OP;
+        
+    MySteps.CRITICAL_HARDWARE_OP:
+        // This step ignores all stop requests
+        IF performCriticalHardwareOperation() THEN
+            // Re-enable stop handling for next step
+            cycleManager.configuration.configuration.step
+                .stopRequest.afterSuccess();
+            cycleManager.steps.next := MySteps.NORMAL_OPERATION;
+        END_IF;
+END_CASE
+
+// Stop requests during critical step will be ignored
+IF stopButton THEN
+    cycleManager.requestStop();  // No effect on CRITICAL_HARDWARE_OP
+END_IF;
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+*)
+METHOD ignore
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.currentStopRequestMode := CNM_CycleManagerInterfaces.StepStopRequestMode.IGNORE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="immediate" Id="{6a3d95a7-b744-45c7-af52-9d52d1a57e48}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Sets the stop request behavior to always process stop requests immediately for the current step.
+
+### Purpose and usage
+This method configures the current step to always process stop requests immediately,
+regardless of the step's execution state or outcome. This setting overrides the sequence
+default for this specific step. Stop requests are handled as soon as they are received,
+potentially interrupting the current operation.
+
+This mode provides the most responsive stop behavior for the specific step but may
+interrupt operations that are in progress.
+
+### typical usage patterns
+1. **Non-critical steps**: Allow immediate stop on safe steps
+2. **Wait steps**: Enable quick response during waits
+3. **User interaction**: Responsive stops during user steps
+4. **Idle states**: Allow immediate stop when idle
+
+### When to use
+- For steps where immediate stop response is acceptable
+- During wait or idle steps
+- For non-critical operations that can be interrupted
+- To override restrictive sequence defaults for specific steps
+
+### Example
+```
+// Configure specific step for immediate stop
+cycleManager.configuration.configuration.step
+    .stopRequest
+    .always();
+
+// Apply to wait steps
+CASE cycleManager.steps.current OF
+    MySteps.WAIT_FOR_INPUT:
+        // This step can be interrupted immediately
+        cycleManager.configuration.configuration.step
+            .stopRequest.always();
+        IF inputReceived THEN
+            cycleManager.steps.next := MySteps.PROCESS_INPUT;
+        END_IF;
+        
+    MySteps.IDLE:
+        // Idle step allows immediate stop
+        cycleManager.configuration.configuration.step
+            .stopRequest.always();
+        IF startCommand THEN
+            cycleManager.steps.next := MySteps.START_PROCESS;
+        END_IF;
+END_CASE
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD immediate
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.currentStopRequestMode := CNM_CycleManagerInterfaces.StepStopRequestMode.IMMEDIATE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="onBusy" Id="{605f75e5-c353-4ff6-bea4-bf03b85d78a2}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This method sets the stop request behaviour to ``StepStopRequestMode.AFTER_NOT_SUCCESS``.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD onBusy
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManager.currentStopRequestMode := CNM_CycleManagerInterfaces.StepStopRequestMode.ON_BUSY;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="pause" Id="{376a078e-f62e-4855-949e-19aaf3af2ff4}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Provides access to the pause configuration for the current cycle manager step.
+
+### Purpose and usage
+This property returns the pause configuration interface that allows setting pause-related
+parameters for the current step. It provides a fluent interface for configuring how
+the cycle manager handles pause requests for this specific step, overriding sequence defaults.
+
+The pause configuration controls:
+- Whether pausing is allowed for this step
+- Step-specific pause timeout behavior
+- Resume conditions for this step
+- Step-specific pause state handling
+
+
+### typical usage patterns
+1. **Disable pause**: Prevent pausing on critical steps
+2. **Enable pause**: Allow pausing on safe steps
+3. **Override defaults**: Change pause behavior for specific steps
+4. **Step-specific timeout**: Set different pause timeout for steps
+
+### When to use
+- To prevent pausing during critical operations
+- To enable pausing on specific wait or idle steps
+- When step-specific pause behavior differs from sequence default
+- For fine-grained pause control in complex sequences
+
+### Example
+```
+// Disable pause for critical step
+CASE cycleManager.steps.current OF
+    MySteps.PREPARE_CRITICAL:
+        cycleManager.configuration.configuration.step
+            .pause.disable();
+        cycleManager.steps.next := MySteps.CRITICAL_OPERATION;
+        
+    MySteps.WAIT_FOR_USER:
+        // Enable pause for wait step
+        cycleManager.configuration.configuration.step
+            .pause.enable();
+        IF userInput THEN
+            cycleManager.steps.next := MySteps.PROCESS_INPUT;
+        END_IF;
+END_CASE
+
+// Configure step with specific pause settings
+cycleManager.configuration.configuration.step
+    .pause
+    .enable()
+    .timeout(T#60S);  // Longer pause allowed for this step
+
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY pause : CNM_CycleManagerInterfaces.IPauseConfiguration
+]]></Declaration>
+      <Get Name="Get" Id="{a1898e3f-fbf5-4ded-9253-afbba99c7171}">
+        <Declaration><![CDATA[VAR_INST
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pause := pauserator;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="stepping" Id="{808b2de3-a8be-4dbf-8b7f-a62d3c96fa49}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Provides access to the stepping configuration for the current cycle manager step.
+
+### Purpose and usage
+This property returns the stepping configuration interface that allows setting stepping-related
+parameters for the current step. It provides a fluent interface for configuring step-by-step
+execution mode for this specific step, overriding sequence defaults.
+
+The stepping configuration controls:
+- Whether stepping mode is enabled for this step
+- Step-specific auto-step delays
+- Step trigger conditions
+- Single-step behavior for this step
+
+
+### typical usage patterns
+1. **Skip stepping**: Disable stepping for automated steps
+2. **Force stepping**: Require manual confirmation for critical steps
+3. **Custom delays**: Set step-specific auto-step timing
+4. **Debug control**: Enable stepping only for complex steps
+
+### When to use
+- To skip stepping mode for simple or automated steps
+- To force stepping on critical steps even in auto mode
+- When specific steps need different stepping behavior
+- For debugging specific steps in a sequence
+
+### Example
+```
+// Disable stepping for automated steps
+CASE cycleManager.steps.current OF
+    MySteps.AUTO_CALCULATION:
+        // This step runs without stepping even in debug mode
+        cycleManager.configuration.configuration.step
+            .stepping.disable();
+        performCalculations();
+        cycleManager.steps.next := MySteps.VERIFY_RESULTS;
+        
+    MySteps.VERIFY_RESULTS:
+        // Force stepping for verification
+        cycleManager.configuration.configuration.step
+            .stepping.enable();
+        IF resultsValid THEN
+            cycleManager.steps.next := MySteps.CONTINUE;
+        END_IF;
+END_CASE
+
+// Configure step with specific stepping settings
+cycleManager.configuration.configuration.step
+    .stepping
+    .enable()
+    .autoStep(TRUE)
+    .autoStepDelay(T#5S);  // Slower auto-step for this step
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY stepping : CNM_CycleManagerInterfaces.ISteppingConfiguration
+]]></Declaration>
+      <Get Name="Get" Id="{aad59fae-da5f-4047-9745-05295dbb2f60}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stepping := steperator;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="stepWidth" Id="{f83fe0c6-0687-44e5-99b5-0e3214dea2de}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Sets the step width for automatic step increment for the current step.
+
+### Purpose and usage
+This property sets the increment value used when automatically advancing from the current step.
+It overrides the sequence default step width for this specific step. When no explicit next step
+is specified, the cycle manager will advance by this step width value.
+
+This allows individual steps to have different increment values, useful for:
+- Skipping blocks of steps
+- Jumping to different sequence sections
+- Implementing conditional branching
+- Custom step numbering schemes
+
+### typical usage patterns
+1. **Skip sections**: Large step width to jump over optional sections
+2. **Branch control**: Different widths for different branches
+3. **Return jumps**: Negative values to go back in sequence
+4. **Custom flow**: Implement complex sequencing logic
+
+### When to use
+- When this step needs to jump to a non-sequential next step
+- For implementing branching logic
+- To skip optional sequence sections
+- When overriding the default sequential flow
+
+### Example
+```
+// Configure step to skip optional section
+CASE cycleManager.steps.current OF
+    100:  // Decision step
+        IF skipOptionalSteps THEN
+            // Jump to step 200, skipping 110-190
+            cycleManager.configuration.configuration.step
+                .stepWidth := 100;
+        ELSE
+            // Normal increment to 110
+            cycleManager.configuration.configuration.step
+                .stepWidth := 10;
+        END_IF;
+        cycleManager.steps.next := 0;  // Use automatic increment
+        
+    190:  // Last optional step
+        // Ensure we continue at 200
+        cycleManager.configuration.configuration.step
+            .stepWidth := 10;
+        cycleManager.steps.next := 0;  // Automatically goes to 200
+        
+    250:  // Loop back step
+        IF repeatRequired THEN
+            // Go back to step 200
+            cycleManager.configuration.configuration.step
+                .stepWidth := -50;
+            cycleManager.steps.next := 0;  // Automatically goes to 200
+        END_IF;
+END_CASE
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY stepWidth : DINT
+]]></Declaration>
+      <Set Name="Set" Id="{5c1ad87c-5dd3-4521-89a2-bd71eaba0811}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.cycleManager.currentStepWidth := stepWidth;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="stopRequest" Id="{257c346e-b2d2-4403-a487-891124d378cf}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Provides access to the stop request configuration interface for the current step.
+
+### Purpose and usage
+This property returns the stop request configuration interface for the current step,
+providing access to methods that configure how the cycle manager handles stop requests
+for this specific step. The configurator itself implements the IStopRequestConfiguration interface.
+
+This allows step-specific stop behavior that overrides sequence defaults:
+- always(): Process stop requests immediately for this step
+- afterSuccess(): Process after this step completes successfully
+- afterNotSuccess(): Process after this step fails
+- ignore(): Ignore all stop requests for this step
+
+
+### typical usage patterns
+1. **Critical steps**: Configure to ignore or defer stops
+2. **Safe steps**: Allow immediate stop processing
+3. **Conditional stops**: Different behavior based on step outcome
+4. **Override defaults**: Step-specific stop handling
+
+### When to use
+- To customize stop behavior for specific steps
+- When certain steps need different stop handling than the sequence default
+- For implementing step-specific safety requirements
+- To ensure critical steps complete before stopping
+
+### Example
+```
+// Configure critical step to complete before stop
+CASE cycleManager.steps.current OF
+    MySteps.PREPARE_CRITICAL:
+        cycleManager.configuration.configuration.step
+            .stopRequest.afterSuccess();
+        cycleManager.steps.next := MySteps.CRITICAL_WRITE;
+        
+    MySteps.WAIT_STEP:
+        // Allow immediate stop during wait
+        cycleManager.configuration.configuration.step
+            .stopRequest.always();
+        IF condition THEN
+            cycleManager.steps.next := MySteps.CONTINUE;
+        END_IF;
+        
+    MySteps.ATOMIC_OPERATION:
+        // This step cannot be stopped
+        cycleManager.configuration.configuration.step
+            .stopRequest.ignore();
+        performAtomicOperation();
+        cycleManager.steps.next := MySteps.NEXT;
+END_CASE
+
+// Chain with other step configurations
+cycleManager.configuration.configuration.step
+    .timeout := T#5S;
+    .stopRequest.afterSuccess();
+    .pause.disable();
+
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+*)
+PROPERTY stopRequest : CNM_CycleManagerInterfaces.IStopRequestConfiguration
+]]></Declaration>
+      <Get Name="Get" Id="{37676101-dd47-4767-8f44-354254030e94}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stopRequest := THIS^;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="timeout" Id="{9c72d6e1-4cf6-4656-87f9-b15f6183605a}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the maximum execution time for the current step. 
+The cycle manager will go into the error step after the time elapsed.
+Set to T#0MS for no timeout.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY timeout : TIME
+]]></Declaration>
+      <Set Name="Set" Id="{de68dd25-2ea1-42db-a7b7-fc0f2efaf0c3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.cycleManager.currentTimeout := timeout;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="timeoutStep" Id="{67bbc2e1-f724-4cb9-9d9c-adb2a413d356}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets the step that will be set if the current step reaches a timeout. 
+Will by default be the error step and reset after the current step changes.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY timeoutStep : DINT
+]]></Declaration>
+      <Set Name="Set" Id="{faf59a0c-13b0-402c-bd90-3337282b00cf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.cycleManager.currentTimeoutStep := timeoutStep;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+  </POU>
+</TcPlcObject>

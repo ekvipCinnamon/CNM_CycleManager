@@ -1,0 +1,231 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="CycleManagerConfigurator" Id="{09a124d4-afc2-44e5-9425-512691010185}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+A class to provide fluent access to the configuration scope of a cycle manager.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+
+*)
+FUNCTION_BLOCK INTERNAL CycleManagerConfigurator IMPLEMENTS CNM_CycleManagerInterfaces.ICycleManagerConfigurationScope
+VAR
+	cycleManagerDefault :CNM_CycleManagerInterfaces.ICycleManagerDefaultParameters;
+	cycleManagerStep :ICycleManagerStepParameters;
+	stepConfigurator :CycleManagerStepConfigurator();
+	defaultConfigurator :CycleManagerDefaultConfigurator();
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_Init" Id="{8de8bd83-cbc0-40b4-b15f-d95938b17d16}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Initializes the CycleManagerConfigurator with required cycle manager parameters.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)   
+	cycleManagerDefault :CNM_CycleManagerInterfaces.ICycleManagerDefaultParameters; //Interface for default cycle manager parameters
+	cycleManagerStep :ICycleManagerStepParameters; //Interface for step-specific cycle manager parameters
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.cycleManagerDefault := cycleManagerDefault;
+THIS^.cycleManagerStep := cycleManagerStep;
+THIS^.defaultConfigurator.cycleManager := cycleManagerDefault;
+THIS^.stepConfigurator.cycleManager := cycleManagerStep;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="sequence" Id="{f34bec73-1c85-403f-a0c7-cedc81ab5a32}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Provides access to sequence-level configuration for all cycle manager steps.
+
+### Purpose and usage
+This property returns the sequence configuration interface that allows setting default parameters
+for all steps in the cycle manager. It provides a fluent interface for configuring sequence-wide
+settings that apply to the entire cycle execution.
+
+The sequence configuration affects all steps uniformly and provides default values for:
+- Pause behavior
+- Stepping mode settings
+- Stop request handling
+- Other sequence-wide parameters
+
+
+### typical usage patterns
+1. **Setting default timeouts**: Configure default timeout for all steps
+2. **Pause configuration**: Set pause behavior for the entire sequence
+3. **Stepping mode**: Configure stepping mode defaults
+4. **Stop handling**: Define how stop requests are handled globally
+
+### When to use
+- When you need to configure default behavior for all steps
+- To set sequence-wide parameters that apply uniformly
+- For configuring global cycle manager behavior
+- When implementing consistent behavior across all steps
+
+### Example
+```
+// Configure sequence defaults
+cycleManager.configuration.configuration.sequence
+    .pauseConfiguration
+        .pauseAllowed(TRUE)
+        .pauseTimeout(T#5S);
+
+// Set stepping mode for entire sequence
+cycleManager.configuration.configuration.sequence
+    .steppingConfiguration
+        .steppingEnabled(debugMode)
+        .autoStepDelay(T#100MS);
+
+// Configure stop request handling
+cycleManager.configuration.configuration.sequence
+    .stopRequestConfiguration
+        .stopAllowed(TRUE)
+        .immediateStop(FALSE);
+
+```
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY sequence : CNM_CycleManagerInterfaces.ISequenceConfiguration
+]]></Declaration>
+      <Get Name="Get" Id="{ee08bf4e-fd13-4fa8-9437-4ae131668357}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[sequence := defaultConfigurator;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="step" Id="{b6ad1a70-7e36-4e52-a7be-3476a89a09d8}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Provides access to step-specific configuration for individual cycle manager steps.
+
+### Purpose and usage
+This property returns the step configuration interface that allows setting parameters
+for specific steps in the cycle manager. It provides a fluent interface for configuring
+individual step behavior that overrides the sequence defaults.
+
+The step configuration allows fine-grained control over individual steps including:
+- Step-specific timeouts
+- Individual pause behavior
+- Custom stepping settings
+- Step-specific stop handling
+
+### typical usage patterns
+1. **Step-specific timeouts**: Override default timeout for critical steps
+2. **Disable pause**: Prevent pausing on critical operation steps
+3. **Skip stepping**: Make certain steps non-steppable in debug mode
+4. **Custom behavior**: Define unique behavior for specific steps
+
+### When to use
+- When specific steps need different behavior than the sequence default
+- For critical steps that should not be pausable or steppable
+- To set custom timeouts for long-running operations
+- When implementing step-specific error handling
+
+### Example
+```
+// Configure specific step with custom timeout
+cycleManager.configuration.configuration.step
+    .forStep(MySteps.LONG_OPERATION)
+    .setTimeout(T#30S)
+    .pauseAllowed(FALSE);  // Critical step - no pause allowed
+
+// Configure multiple steps
+cycleManager.configuration.configuration.step
+    .forStep(MySteps.INIT)
+    .setTimeout(T#5S)
+    .steppingAllowed(TRUE);
+
+cycleManager.configuration.configuration.step
+    .forStep(MySteps.CRITICAL_PROCESS)
+    .setTimeout(T#10S)
+    .pauseAllowed(FALSE)
+    .stopAllowed(FALSE);  // Must complete once started
+
+// Configure error step
+cycleManager.configuration.configuration.step
+    .forStep(DefaultSteps.STEP.ERROR)
+    .setTimeout(T#0S)  // No timeout in error state
+    .steppingAllowed(TRUE);  // Allow stepping through error handling
+```
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2025 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+
+*)
+PROPERTY step : CNM_CycleManagerInterfaces.IStepConfiguration
+]]></Declaration>
+      <Get Name="Get" Id="{cde4c806-6084-49f7-89f7-f5822443ab82}">
+        <Declaration><![CDATA[VAR_INST
+	conf :CycleManagerStepConfigurator();
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[step := stepConfigurator;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

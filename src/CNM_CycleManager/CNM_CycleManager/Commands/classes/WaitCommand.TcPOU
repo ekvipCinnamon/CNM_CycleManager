@@ -1,0 +1,179 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="WaitCommand" Id="{bcd05360-95c6-4ef9-8318-863bc19a33f1}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+
+## Short summary
+A simple command to wait for a given time.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2024 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+FUNCTION_BLOCK FINAL WaitCommand EXTENDS CNM_AbstractObject.Object IMPLEMENTS CNM_CommandInterfaces.ICommand
+VAR
+	timeToWait :TIME;
+	timer :TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="className" Id="{9c53f1b8-14fd-4968-8dbd-d61279cdcc1d}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This abstract property returns the class name of the concrete object, 
+which is useful for logging/debugging purpose or to check the class name
+for ``__DELETE`` in factories (sometimes it's necessary to do more 
+than just to free the memory).
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2022 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY className : CNM_AbstractObject.ClassName
+]]></Declaration>
+      <Get Name="Get" Id="{b5d258ae-15e7-40c5-8bfe-5640fdb0cf22}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[className := 'CNM_CycleManager.WaitCommand';
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="executeCommand" Id="{532117f4-b3b8-44a9-a379-d5e7878f0d7c}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+Executes the action associated with this command.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2022 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD executeCommand : CNM_ReturnTypes.SingleExecutionState
+VAR_INPUT
+	(*control bit to start or abort the command*)
+	execute	: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.timer(IN := execute AND (THIS^.waitTime <> T#0S), PT := THIS^.waitTime);
+IF(THIS^.timer.Q OR_ELSE THIS^.waitTime = T#0S)THEN
+	executeCommand := CNM_ReturnTypes.SingleExecutionState.SUCCESS;
+ELSE
+	executeCommand := CNM_ReturnTypes.SingleExecutionState.BUSY;	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_init" Id="{f148e7fb-bbcf-417c-8c74-cfea2cd33cdb}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+The constructor ``FB_init`` is needed to create an unique hash code.
+The hash code is a pseudo random number create with a xorshift_ algorithm.
+It can be overwritten on derivations, because it will be called implicit, ``SUPER^.FB_init()`` is not required.
+For more information check: `Behavoir with derived function blocks`_
+
+.. _Behavoir with derived function blocks: https://infosys.beckhoff.com/content/1033/tc3_plc_intro/5482088715.html?id=6983869892358031022
+.. _xorshift: https://en.wikipedia.org/wiki/Xorshift
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2022 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+METHOD FB_init :BOOL
+VAR_INPUT
+	(* if TRUE, the retain variables are initialized (warm start / cold start)*)
+	bInitRetains	:BOOL;
+	(* if TRUE, the instance afterwards gets moved into the copy code (online change) *)
+	bInCopyCode	:BOOL;
+	(* time to wait until return state is success *)
+	waitTime :TIME;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.timeToWait := waitTime;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="waitTime" Id="{f9c06e47-b643-4f08-9f90-128a82ad340f}">
+      <Declaration><![CDATA[(*
+
+## Short summary
+This property sets or gets the time to wait for until the command returns SUCCESS.
+
+.. <legal notes>
+
+legal notes
+=================
+| SPDX-FileCopyrightText: © 2022 ekvip automation GmbH <info@ekvip.de>
+| SPDX-License-Identifier: Apache-2.0
+| For details check: Apache-2.0_
+
+.. _Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+.. </legal notes>
+
+*)
+PROPERTY waitTime : TIME
+]]></Declaration>
+      <Get Name="Get" Id="{5ce136bd-92df-4b69-b3b3-b30061220486}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[waitTime := THIS^.timeToWait;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{82103ca7-14e9-40e0-8c93-031525663c1a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[THIS^.timeToWait := waitTime;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+  </POU>
+</TcPlcObject>
